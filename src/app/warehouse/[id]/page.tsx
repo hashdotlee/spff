@@ -2,9 +2,11 @@
 
 import { Suspense, useEffect, useState, use } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import type { Warehouse, VoiceNote } from '@/types/database';
+import type { Warehouse, VoiceNote, UserRole } from '@/types/database';
 import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
+import { deleteWarehouse } from '@/lib/utils/adminActions';
 import { AudioRecorder } from '@/components/voice/AudioRecorder';
 import { VoiceNoteCard } from '@/components/voice/VoiceNoteCard';
 import {
@@ -16,13 +18,18 @@ import {
   Flag,
   AlertTriangle,
   Check,
+  Trash2,
+  ShieldAlert,
 } from 'lucide-react';
 
 function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
+  const router = useRouter();
   const { id: warehouseId } = use(paramsPromise);
   const [warehouse, setWarehouse] = useState<Warehouse | null>(null);
   const [voiceNotes, setVoiceNotes] = useState<VoiceNote[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
+  const [isDeletingWh, setIsDeletingWh] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showReportWarehouse, setShowReportWarehouse] = useState(false);
   const [reportReason, setReportReason] = useState('');
@@ -36,7 +43,15 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (user) setCurrentUserId(user.id);
+      if (user) {
+        setCurrentUserId(user.id);
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        if (profile) setCurrentUserRole(profile.role);
+      }
 
       // Load warehouse
       const { data: whData } = await supabase
@@ -83,6 +98,26 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
     }
   }
 
+  async function handleDeleteWarehouse() {
+    const confirmMsg =
+      currentUserRole === 'admin'
+        ? `Bạn có chắc chắn muốn XÓA kho "${warehouse?.name}" với quyền Quản trị viên (Admin)?`
+        : `Bạn có chắc chắn muốn xóa kho "${warehouse?.name}" của mình?`;
+    if (!confirm(confirmMsg)) return;
+
+    setIsDeletingWh(true);
+    try {
+      await deleteWarehouse(supabase, warehouseId);
+      alert('Đã xóa kho thành công!');
+      router.push('/');
+    } catch (err) {
+      console.error('Lỗi khi xóa kho:', err);
+      alert('Có lỗi xảy ra khi xóa kho. Vui lòng thử lại!');
+    } finally {
+      setIsDeletingWh(false);
+    }
+  }
+
   useEffect(() => {
     loadData();
   }, [warehouseId]);
@@ -120,7 +155,7 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
         setShowReportWarehouse(false);
         setReportSuccess(false);
         setReportReason('');
-      }, 1500);
+      }, 2200);
     } catch (err) {
       console.error('Error reporting warehouse:', err);
     }
@@ -176,8 +211,27 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
           >
             <Flag className="w-4 h-4" />
           </button>
+
+          {(currentUserRole === 'admin' || currentUserId === warehouse.created_by) && (
+            <button
+              onClick={handleDeleteWarehouse}
+              disabled={isDeletingWh}
+              className="px-2.5 py-1.5 text-red-600 hover:bg-red-50 border border-red-200 rounded-xl transition active:scale-95 flex items-center gap-1 text-xs font-bold disabled:opacity-50"
+              title={currentUserRole === 'admin' ? 'Quản trị viên xóa kho này' : 'Xóa kho do bạn tạo'}
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="hidden xs:inline">Xóa kho</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {currentUserRole === 'admin' && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-2 text-red-800 text-xs font-medium">
+          <ShieldAlert className="w-4 h-4 text-red-600 shrink-0" />
+          <span>Quyền Quản trị viên: Bạn có thể xóa kho hoặc xóa bất kỳ chỉ dẫn bất thường nào tại đây.</span>
+        </div>
+      )}
 
       {/* Main Info Card */}
       <div className="bg-white rounded-2xl p-4 sm:p-6 border border-slate-200 shadow-xs space-y-3.5 sm:space-y-4">
@@ -241,7 +295,9 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
                 key={note.id}
                 note={note}
                 currentUserId={currentUserId}
+                currentUserRole={currentUserRole}
                 onVoteChange={loadData}
+                onDelete={loadData}
               />
             ))}
           </div>
@@ -268,9 +324,14 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
             </div>
 
             {reportSuccess ? (
-              <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
-                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Đã gửi báo cáo cho quản trị viên kiểm tra!</span>
+              <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl text-xs space-y-1">
+                <div className="flex items-center gap-2 font-bold">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Đã gửi báo cáo cho quản trị viên kiểm tra!</span>
+                </div>
+                <p className="text-[11px] text-emerald-700 pl-6">
+                  Bạn có thể theo dõi tiến độ xử lý báo cáo tại mục Hồ Sơ cá nhân.
+                </p>
               </div>
             ) : (
               <form onSubmit={handleReportWarehouse} className="space-y-3">

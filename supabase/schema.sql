@@ -24,10 +24,16 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name)
-  VALUES (new.id, new.email, COALESCE(new.raw_user_meta_data->>'full_name', 'Tài xế'))
+  INSERT INTO public.profiles (id, email, full_name, role)
+  VALUES (
+    new.id,
+    new.email,
+    COALESCE(new.raw_user_meta_data->>'full_name', 'Tài xế'),
+    CASE WHEN new.email = 'hashdotlee@gmail.com' THEN 'admin' ELSE 'user' END
+  )
   ON CONFLICT (id) DO UPDATE
-  SET email = EXCLUDED.email;
+  SET email = EXCLUDED.email,
+      role = CASE WHEN EXCLUDED.email = 'hashdotlee@gmail.com' THEN 'admin' ELSE public.profiles.role END;
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -215,6 +221,12 @@ CREATE POLICY "Owners and admins can update warehouses" ON public.warehouses
     EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
   );
 
+CREATE POLICY "Owners and admins can delete warehouses" ON public.warehouses
+  FOR DELETE USING (
+    auth.uid() = created_by OR
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+  );
+
 -- Voice Notes: Xem các note active; User đăng nhập được thêm
 CREATE POLICY "Active voice notes are viewable by everyone" ON public.voice_notes
   FOR SELECT USING (
@@ -231,6 +243,12 @@ CREATE POLICY "Authenticated users can create voice notes" ON public.voice_notes
 
 CREATE POLICY "Owners and admins can update voice notes" ON public.voice_notes
   FOR UPDATE USING (
+    auth.uid() = user_id OR
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+  );
+
+CREATE POLICY "Owners and admins can delete voice notes" ON public.voice_notes
+  FOR DELETE USING (
     auth.uid() = user_id OR
     EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
   );
@@ -263,6 +281,11 @@ CREATE POLICY "Admins and reporters can view reports" ON public.reports
 
 CREATE POLICY "Admins can update reports" ON public.reports
   FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+  );
+
+CREATE POLICY "Admins can delete reports" ON public.reports
+  FOR DELETE USING (
     EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
   );
 
@@ -300,3 +323,9 @@ CREATE POLICY "Authenticated users can upload avatars" ON storage.objects
     bucket_id = 'avatars' AND
     auth.uid() IS NOT NULL
   );
+
+-- 11. Gán quyền Quản Trị Viên (Admin) cho tài khoản quản lý
+UPDATE public.profiles
+SET role = 'admin'
+WHERE email = 'hashdotlee@gmail.com';
+

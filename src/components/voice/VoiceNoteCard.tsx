@@ -2,9 +2,10 @@
 
 import { useState, useRef } from 'react';
 import Link from 'next/link';
-import type { VoiceNote, Profile } from '@/types/database';
+import type { VoiceNote, Profile, UserRole } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
 import { VietQRModal } from '@/components/donation/VietQRModal';
+import { deleteVoiceNote } from '@/lib/utils/adminActions';
 import {
   Play,
   Pause,
@@ -15,18 +16,23 @@ import {
   Volume2,
   AlertTriangle,
   Check,
+  Trash2,
 } from 'lucide-react';
 
 interface VoiceNoteCardProps {
   note: VoiceNote;
   currentUserId?: string | null;
+  currentUserRole?: UserRole | null;
   onVoteChange?: () => void;
+  onDelete?: (noteId: string) => void | Promise<void>;
 }
 
 export function VoiceNoteCard({
   note,
   currentUserId,
+  currentUserRole,
   onVoteChange,
+  onDelete,
 }: VoiceNoteCardProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -38,6 +44,7 @@ export function VoiceNoteCard({
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [reported, setReported] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const supabase = createClient();
@@ -133,9 +140,32 @@ export function VoiceNoteCard({
         setShowReportModal(false);
         setReported(false);
         setReportReason('');
-      }, 1500);
+      }, 2200);
     } catch (err) {
       console.error('Error reporting:', err);
+    }
+  }
+
+  async function handleDelete() {
+    const confirmMsg =
+      currentUserRole === 'admin'
+        ? 'Bạn có chắc chắn muốn XÓA chỉ dẫn này với quyền Quản trị viên (Admin)?'
+        : 'Bạn có chắc chắn muốn xóa lời nhắn chỉ đường của mình không?';
+    if (!confirm(confirmMsg)) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteVoiceNote(supabase, note.id, note.audio_url);
+      if (onDelete) {
+        await onDelete(note.id);
+      } else {
+        onVoteChange?.();
+      }
+    } catch (err) {
+      console.error('Lỗi khi xóa chỉ dẫn:', err);
+      alert('Không thể xóa chỉ dẫn. Vui lòng thử lại!');
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -212,6 +242,22 @@ export function VoiceNoteCard({
           >
             <Flag className="w-3.5 h-3.5" />
           </button>
+
+          {(currentUserRole === 'admin' || currentUserId === note.user_id) && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition active:scale-95 disabled:opacity-50"
+              title={
+                currentUserRole === 'admin'
+                  ? 'Quản trị viên xóa chỉ dẫn này'
+                  : 'Xóa chỉ dẫn của bạn'
+              }
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -312,9 +358,14 @@ export function VoiceNoteCard({
             </div>
 
             {reported ? (
-              <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
-                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Đã gửi báo cáo cho quản trị viên kiểm tra!</span>
+              <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl text-xs space-y-1">
+                <div className="flex items-center gap-2 font-bold">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Đã gửi báo cáo cho quản trị viên kiểm tra!</span>
+                </div>
+                <p className="text-[11px] text-emerald-700 pl-6">
+                  Bạn có thể theo dõi tiến độ xử lý báo cáo tại mục Hồ Sơ cá nhân.
+                </p>
               </div>
             ) : (
               <form onSubmit={handleSubmitReport} className="space-y-3">

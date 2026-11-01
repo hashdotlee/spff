@@ -34,6 +34,10 @@ function RegisterForm() {
     setLoading(true);
 
     try {
+      const siteUrl =
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        (typeof window !== 'undefined' ? window.location.origin : 'https://spff.site');
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -41,6 +45,7 @@ function RegisterForm() {
           data: {
             full_name: fullName.trim() || 'Tài xế mới',
           },
+          emailRedirectTo: `${siteUrl}/auth/callback`,
         },
       });
 

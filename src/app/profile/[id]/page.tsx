@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import type { Profile, UserBadge, VoiceNote } from '@/types/database';
+import type { Profile, UserBadge, VoiceNote, Report } from '@/types/database';
 import { VietQRModal } from '@/components/donation/VietQRModal';
 import {
   Award,
@@ -16,6 +16,14 @@ import {
   Volume2,
   ThumbsUp,
   ArrowLeft,
+  Flag,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  MapPin,
+  ExternalLink,
+  User,
+  AlertCircle,
 } from 'lucide-react';
 
 function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
@@ -24,6 +32,8 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userBadges, setUserBadges] = useState<UserBadge[]>([]);
   const [voiceNotes, setVoiceNotes] = useState<VoiceNote[]>([]);
+  const [myReports, setMyReports] = useState<Report[]>([]);
+  const [activeTab, setActiveTab] = useState<'contributions' | 'reports'>('contributions');
   const [loading, setLoading] = useState(true);
   const [showQRModal, setShowQRModal] = useState(false);
 
@@ -81,6 +91,24 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
 
         if (notesData) {
           setVoiceNotes(notesData);
+        }
+
+        // If the viewer is the owner of this profile, load their reports
+        if (user && user.id === profileId) {
+          const { data: repData } = await supabase
+            .from('reports')
+            .select(`
+              *,
+              warehouse:warehouses(id, name, address),
+              voice_note:voice_notes(id, note_text, duration_seconds),
+              reported_user:profiles!reported_user_id(id, full_name)
+            `)
+            .eq('reporter_id', profileId)
+            .order('created_at', { ascending: false });
+
+          if (repData) {
+            setMyReports(repData as Report[]);
+          }
         }
       } catch (err) {
         console.error('Error loading profile:', err);
@@ -229,52 +257,226 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
         )}
       </div>
 
-      {/* Voice notes contributed */}
-      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs">
-        <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <Volume2 className="w-4 h-4 text-orange-600" />
-          <span>Chỉ Dẫn Voice Đã Đóng Góp ({voiceNotes.length})</span>
-        </h2>
+      {/* Navigation Tabs between Contributed Voice Notes & Reports (when owner) */}
+      {isOwner ? (
+        <div className="flex border-b border-slate-200 gap-2 sm:gap-4 text-xs font-bold">
+          <button
+            onClick={() => setActiveTab('contributions')}
+            className={`pb-2.5 sm:pb-3 px-2 sm:px-1 border-b-2 transition flex items-center gap-1.5 ${
+              activeTab === 'contributions'
+                ? 'border-orange-600 text-orange-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Volume2 className="w-4 h-4" />
+            <span>Chỉ Dẫn Voice ({voiceNotes.length})</span>
+          </button>
 
-        {voiceNotes.length > 0 ? (
-          <div className="space-y-2.5 sm:space-y-3">
-            {voiceNotes.map((vn) => (
-              <div
-                key={vn.id}
-                className="p-3 sm:p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col xs:flex-row items-stretch xs:items-center justify-between gap-2.5 text-xs"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-800 line-clamp-2">
-                    {vn.note_text || 'Chỉ đường chi tiết bằng giọng nói'}
-                  </p>
-                  <span className="text-[11px] text-slate-400 mt-0.5 block">
-                    Thời lượng: {vn.duration_seconds}s •{' '}
-                    {new Date(vn.created_at).toLocaleDateString('vi-VN')}
-                  </span>
-                </div>
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`pb-2.5 sm:pb-3 px-2 sm:px-1 border-b-2 transition flex items-center gap-1.5 ${
+              activeTab === 'reports'
+                ? 'border-red-600 text-red-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Flag className="w-4 h-4" />
+            <span>Báo Cáo Của Tôi ({myReports.length})</span>
+            {myReports.some((r) => r.status === 'pending') && (
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            )}
+          </button>
+        </div>
+      ) : null}
 
-                <div className="flex items-center justify-between xs:justify-end gap-2 shrink-0">
-                  <div className="flex items-center gap-1 font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
-                    <ThumbsUp className="w-3.5 h-3.5" />
-                    <span>+{vn.upvotes_count}</span>
+      {/* Voice notes contributed tab */}
+      {(!isOwner || activeTab === 'contributions') && (
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs">
+          <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Volume2 className="w-4 h-4 text-orange-600" />
+            <span>Chỉ Dẫn Voice Đã Đóng Góp ({voiceNotes.length})</span>
+          </h2>
+
+          {voiceNotes.length > 0 ? (
+            <div className="space-y-2.5 sm:space-y-3">
+              {voiceNotes.map((vn) => (
+                <div
+                  key={vn.id}
+                  className="p-3 sm:p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col xs:flex-row items-stretch xs:items-center justify-between gap-2.5 text-xs"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-slate-800 line-clamp-2">
+                      {vn.note_text || 'Chỉ đường chi tiết bằng giọng nói'}
+                    </p>
+                    <span className="text-[11px] text-slate-400 mt-0.5 block">
+                      Thời lượng: {vn.duration_seconds}s •{' '}
+                      {new Date(vn.created_at).toLocaleDateString('vi-VN')}
+                    </span>
                   </div>
 
-                  <Link
-                    href={`/warehouse/${vn.warehouse_id}`}
-                    className="min-h-[34px] px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold text-[11px] transition flex items-center justify-center active:scale-95"
-                  >
-                    Xem kho
-                  </Link>
+                  <div className="flex items-center justify-between xs:justify-end gap-2 shrink-0">
+                    <div className="flex items-center gap-1 font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
+                      <ThumbsUp className="w-3.5 h-3.5" />
+                      <span>+{vn.upvotes_count}</span>
+                    </div>
+
+                    <Link
+                      href={`/warehouse/${vn.warehouse_id}`}
+                      className="min-h-[34px] px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold text-[11px] transition flex items-center justify-center active:scale-95"
+                    >
+                      Xem kho
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 italic py-2">
+              {isOwner
+                ? 'Bạn chưa ghi chú chỉ đường nào. Hãy đến một kho hàng và thu âm chỉ đường để hỗ trợ đồng nghiệp!'
+                : 'Tài xế này chưa ghi chú chỉ đường nào.'}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Reports submitted tab (Owner only) */}
+      {isOwner && activeTab === 'reports' && (
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <Flag className="w-4 h-4 text-red-600" />
+              <span>Tiến Độ Báo Cáo Vi Phạm Của Bạn</span>
+            </h2>
+            <span className="text-[11px] text-slate-400">
+              Tổng số: {myReports.length}
+            </span>
           </div>
-        ) : (
-          <p className="text-xs text-slate-500 italic py-2">
-            Tài xế này chưa ghi chú chỉ đường nào.
+
+          <p className="text-xs text-slate-500">
+            Trạng thái xử lý của các nội dung kho hoặc chỉ dẫn bất thường bạn đã gửi cho Quản trị viên.
           </p>
-        )}
-      </div>
+
+          {myReports.length > 0 ? (
+            <div className="space-y-3 pt-1">
+              {myReports.map((r) => {
+                return (
+                  <div
+                    key={r.id}
+                    className={`p-3.5 sm:p-4 rounded-xl border transition text-xs space-y-2.5 ${
+                      r.status === 'pending'
+                        ? 'bg-amber-50/40 border-amber-200'
+                        : r.status === 'resolved'
+                        ? 'bg-emerald-50/30 border-emerald-200'
+                        : 'bg-slate-50 border-slate-200 opacity-80'
+                    }`}
+                  >
+                    {/* Header: Date + Status Badge */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-[11px] text-slate-400">
+                        Gửi lúc: {new Date(r.created_at).toLocaleString('vi-VN')}
+                      </span>
+
+                      {/* Status Badges */}
+                      {r.status === 'pending' && (
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 flex items-center gap-1 border border-amber-200">
+                          <Clock className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Chờ Quản Trị Viên xử lý</span>
+                        </span>
+                      )}
+
+                      {r.status === 'resolved' && (
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1 border border-emerald-200">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Đã xử lý thành công</span>
+                        </span>
+                      )}
+
+                      {r.status === 'dismissed' && (
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 flex items-center gap-1 border border-slate-200">
+                          <XCircle className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Đã xem xét (Bỏ qua)</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Reason */}
+                    <div className="p-2.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs">
+                      <span className="font-bold text-slate-800 block text-[11px] mb-0.5">
+                        Lý do bạn báo cáo:
+                      </span>
+                      <p className="text-xs text-slate-700 font-medium">
+                        &ldquo;{r.reason}&rdquo;
+                      </p>
+                    </div>
+
+                    {/* Target reported */}
+                    <div className="flex items-center gap-2 text-xs text-slate-600 pt-0.5">
+                      {r.warehouse && (
+                        <div className="flex items-center justify-between gap-2 w-full bg-blue-50/60 p-2 rounded-lg border border-blue-100 text-blue-800">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            <span className="truncate">Kho: {r.warehouse.name}</span>
+                          </div>
+                          <Link
+                            href={`/warehouse/${r.warehouse.id}`}
+                            className="text-[11px] font-bold underline hover:text-blue-900 shrink-0"
+                          >
+                            Xem kho
+                          </Link>
+                        </div>
+                      )}
+
+                      {r.voice_note && (
+                        <div className="flex items-center gap-1.5 w-full bg-orange-50/60 p-2 rounded-lg border border-orange-100 text-orange-800">
+                          <Volume2 className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                          <span className="truncate">
+                            Chỉ dẫn voice: {r.voice_note.note_text || 'Ghi âm chỉ đường'} ({r.voice_note.duration_seconds}s)
+                          </span>
+                        </div>
+                      )}
+
+                      {r.reported_user && !r.warehouse && !r.voice_note && (
+                        <div className="flex items-center gap-1.5 w-full bg-slate-100 p-2 rounded-lg border border-slate-200 text-slate-700">
+                          <User className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          <span className="truncate">Tài xế: {r.reported_user.full_name}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Status explanation */}
+                    <div className="text-[11px] text-slate-500 pt-0.5">
+                      {r.status === 'pending' && (
+                        <span className="text-amber-700">
+                          ⏳ Quản trị viên đang xem xét báo cáo. Nếu có sai phạm, kho hoặc chỉ dẫn sẽ bị gỡ bỏ ngay.
+                        </span>
+                      )}
+                      {r.status === 'resolved' && (
+                        <span className="text-emerald-700 font-medium">
+                          ✓ Quản trị viên đã kiểm tra và xử lý vi phạm này (gỡ bỏ nội dung sai lệch hoặc xử lý tài khoản).
+                        </span>
+                      )}
+                      {r.status === 'dismissed' && (
+                        <span className="text-slate-500">
+                          ℹ️ Quản trị viên đã xác minh lại và ghi nhận nội dung hợp lệ hoặc đã được điều chỉnh.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+              <Flag className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="font-bold text-slate-700">Bạn chưa gửi báo cáo vi phạm nào.</p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Khi phát hiện kho bãi sai tọa độ hoặc chỉ dẫn giọng nói gây lạc đường, bạn có thể bấm nút báo cáo để ban quản trị kiểm tra.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       <VietQRModal
         isOpen={showQRModal}
