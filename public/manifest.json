@@ -1,0 +1,18 @@
+{
+  "name": "SPFF - Định Vị Kho & Chỉ Đường Tài Xế",
+  "short_name": "Kho Bãi",
+  "description": "Ứng dụng hỗ trợ cộng đồng tài xế định vị kho hàng và ghi chú voice chỉ đường",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ea580c",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

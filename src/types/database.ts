@@ -1,0 +1,92 @@
+export type UserRole = 'user' | 'admin';
+export type WarehouseStatus = 'active' | 'reported' | 'hidden';
+export type VoiceNoteStatus = 'active' | 'hidden';
+export type ReportStatus = 'pending' | 'resolved' | 'dismissed';
+
+export interface Profile {
+  id: string;
+  email: string | null;
+  full_name: string;
+  phone: string | null;
+  avatar_url: string | null;
+  role: UserRole;
+  is_banned: boolean;
+  bank_name: string | null;
+  bank_account_no: string | null;
+  bank_account_name: string | null;
+  reputation_score: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Warehouse {
+  id: string;
+  name: string;
+  address: string | null;
+  latitude: number;
+  longitude: number;
+  description: string | null;
+  created_by: string | null;
+  status: WarehouseStatus;
+  created_at: string;
+  // Computed / Joined fields
+  distance_km?: number;
+  voice_notes_count?: number;
+  creator?: Profile | null;
+}
+
+export interface VoiceNote {
+  id: string;
+  warehouse_id: string;
+  user_id: string;
+  audio_url: string;
+  duration_seconds: number;
+  note_text: string | null;
+  upvotes_count: number;
+  downvotes_count: number;
+  status: VoiceNoteStatus;
+  created_at: string;
+  // Joined fields
+  user?: Profile | null;
+  user_vote?: number | null; // 1: upvoted, -1: downvoted, null: not voted
+}
+
+export interface VoiceVote {
+  id: string;
+  voice_note_id: string;
+  user_id: string;
+  vote_value: 1 | -1;
+  created_at: string;
+}
+
+export interface Report {
+  id: string;
+  reporter_id: string;
+  reported_user_id: string | null;
+  warehouse_id: string | null;
+  voice_note_id: string | null;
+  reason: string;
+  status: ReportStatus;
+  created_at: string;
+  // Joined
+  reporter?: Profile | null;
+  reported_user?: Profile | null;
+  warehouse?: Warehouse | null;
+  voice_note?: VoiceNote | null;
+}
+
+export interface Badge {
+  id: string;
+  title: string;
+  description: string;
+  icon_name: string;
+  min_points: number;
+}
+
+export interface UserBadge {
+  id: string;
+  user_id: string;
+  badge_id: string;
+  earned_at: string;
+  badge?: Badge;
+}
