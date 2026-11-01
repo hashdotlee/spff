@@ -191,6 +191,11 @@ export default function MapView({
               : ''
           }
           <p class="text-[11px] text-slate-500 mt-1 line-clamp-2">${wh.address || ''}</p>
+          ${
+            wh.creator?.full_name
+              ? `<span class="text-[10px] text-slate-500 block mt-0.5">Ghim bởi: <strong class="text-slate-700">${wh.creator.full_name}</strong></span>`
+              : ''
+          }
           <div class="mt-2.5 flex items-center gap-1.5">
             <a href="${navUrl}" target="_blank" rel="noopener noreferrer" 
                class="px-2.5 py-1.5 bg-blue-600 text-white rounded-lg text-[11px] font-bold inline-flex items-center justify-center hover:bg-blue-700 active:scale-95 transition">

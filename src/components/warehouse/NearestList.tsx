@@ -1,10 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import type { Warehouse } from '@/types/database';
 import { formatDistance } from '@/lib/utils/distance';
 import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
-import { Navigation2, Volume2, MapPin, ChevronRight } from 'lucide-react';
+import { VietQRModal } from '@/components/donation/VietQRModal';
+import { Navigation2, Volume2, MapPin, ChevronRight, Heart } from 'lucide-react';
 
 interface NearestListProps {
   warehouses: Warehouse[];
@@ -17,6 +19,8 @@ export function NearestList({
   selectedWarehouseId,
   onSelectWarehouse,
 }: NearestListProps) {
+  const [thankWh, setThankWh] = useState<Warehouse | null>(null);
+
   if (warehouses.length === 0) {
     return (
       <div className="bg-white rounded-2xl p-6 border border-slate-200 text-center text-slate-500">
@@ -91,7 +95,33 @@ export function NearestList({
                         <Volume2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span>{wh.voice_notes_count || 0} voice chỉ đường</span>
                       </span>
+
+                      {wh.creator && (
+                        <span className="text-slate-500 text-[11px] flex items-center gap-1">
+                          <span className="text-slate-400">• Ghim bởi:</span>
+                          <span className="font-semibold text-slate-700 truncate max-w-[120px]">
+                            {wh.creator.full_name}
+                          </span>
+                        </span>
+                      )}
                     </div>
+
+                    {wh.creator && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setThankWh(wh);
+                          }}
+                          className="min-h-[28px] px-2.5 py-1 text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition text-[11px] font-bold inline-flex items-center gap-1.5 border border-rose-200/80 active:scale-95"
+                          title="Cảm ơn người ghim kho"
+                        >
+                          <Heart className="w-3 h-3 fill-rose-600 text-rose-600 shrink-0" />
+                          <span>Cảm ơn người ghim</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -123,6 +153,25 @@ export function NearestList({
           );
         })}
       </div>
+
+      {thankWh && thankWh.creator && (
+        <VietQRModal
+          isOpen={!!thankWh}
+          onClose={() => setThankWh(null)}
+          driverName={thankWh.creator.full_name}
+          bankName={thankWh.creator.bank_name}
+          bankAccountNo={thankWh.creator.bank_account_no}
+          bankAccountName={thankWh.creator.bank_account_name}
+          title="Cảm Ơn Người Ghim Kho"
+          subtitle={
+            <>
+              Gửi chút cà phê cảm ơn bác tài{' '}
+              <strong className="text-orange-600">{thankWh.creator.full_name}</strong> đã ghim kho {thankWh.name}!
+            </>
+          }
+          transferMessage="Cam on bac tai ghim kho"
+        />
+      )}
     </div>
   );
 }

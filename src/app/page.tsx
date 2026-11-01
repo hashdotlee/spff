@@ -74,6 +74,7 @@ export default function HomePage() {
         .from('warehouses')
         .select(`
           *,
+          creator:profiles(*),
           voice_notes:voice_notes(count)
         `)
         .eq('status', 'active');

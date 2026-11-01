@@ -9,6 +9,7 @@ import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
 import { deleteWarehouse } from '@/lib/utils/adminActions';
 import { AudioRecorder } from '@/components/voice/AudioRecorder';
 import { VoiceNoteCard } from '@/components/voice/VoiceNoteCard';
+import { VietQRModal } from '@/components/donation/VietQRModal';
 import {
   Navigation2,
   MapPin,
@@ -20,6 +21,7 @@ import {
   Check,
   Trash2,
   ShieldAlert,
+  Heart,
 } from 'lucide-react';
 
 function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
@@ -32,6 +34,7 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
   const [isDeletingWh, setIsDeletingWh] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showReportWarehouse, setShowReportWarehouse] = useState(false);
+  const [showPinnerQRModal, setShowPinnerQRModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [reportSuccess, setReportSuccess] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -195,6 +198,17 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
         </Link>
 
         <div className="flex items-center gap-1 sm:gap-1.5">
+          {warehouse.creator && currentUserId !== warehouse.created_by && (
+            <button
+              onClick={() => setShowPinnerQRModal(true)}
+              className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition active:scale-95 flex items-center gap-1.5 text-xs font-bold border border-rose-200 shadow-2xs"
+              title="Cảm ơn người ghim kho"
+            >
+              <Heart className="w-4 h-4 fill-rose-600 shrink-0" />
+              <span className="hidden xs:inline">Cảm ơn người ghim</span>
+            </button>
+          )}
+
           <button
             onClick={handleShare}
             className="p-2 text-slate-600 hover:text-orange-600 rounded-xl hover:bg-slate-100 transition active:scale-95 flex items-center gap-1 text-xs font-semibold"
@@ -258,6 +272,59 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
               Ghi chú bến bãi:
             </strong>
             {warehouse.description}
+          </div>
+        )}
+
+        {/* Pinner Info & Thank You Button */}
+        {warehouse.creator ? (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-3.5 bg-gradient-to-r from-amber-50/70 via-orange-50/40 to-amber-50/70 rounded-xl border border-amber-200/70">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Link
+                href={`/profile/${warehouse.creator.id}`}
+                className="w-10 h-10 rounded-full bg-orange-100 border border-orange-200 flex items-center justify-center text-orange-700 font-bold text-xs shrink-0 overflow-hidden active:scale-95 transition"
+              >
+                {warehouse.creator.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={warehouse.creator.avatar_url}
+                    alt={warehouse.creator.full_name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  warehouse.creator.full_name?.[0]?.toUpperCase() || 'TX'
+                )}
+              </Link>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] text-slate-500 font-medium">Người ghim kho:</span>
+                  <Link
+                    href={`/profile/${warehouse.creator.id}`}
+                    className="text-xs sm:text-sm font-bold text-slate-900 hover:text-orange-600 truncate transition"
+                  >
+                    {warehouse.creator.full_name}
+                  </Link>
+                </div>
+                <span className="text-[10px] text-slate-400 block -mt-0.5">
+                  Đã ghim ngày {new Date(warehouse.created_at).toLocaleDateString('vi-VN')}
+                </span>
+              </div>
+            </div>
+
+            {currentUserId !== warehouse.created_by && (
+              <button
+                type="button"
+                onClick={() => setShowPinnerQRModal(true)}
+                className="min-h-[40px] px-3.5 py-2 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs shrink-0 self-start sm:self-center"
+                title="Gửi cà phê cảm ơn người đã ghim kho này"
+              >
+                <Heart className="w-4 h-4 fill-white shrink-0" />
+                <span>Cảm ơn người ghim</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="text-[11px] text-slate-400 flex items-center gap-1.5 px-1">
+            <span>Kho do cộng đồng bác tài SPFF đóng góp</span>
           </div>
         )}
 
@@ -363,6 +430,25 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
             )}
           </div>
         </div>
+      )}
+      {/* Thank Pinner VietQR Modal */}
+      {warehouse.creator && (
+        <VietQRModal
+          isOpen={showPinnerQRModal}
+          onClose={() => setShowPinnerQRModal(false)}
+          driverName={warehouse.creator.full_name}
+          bankName={warehouse.creator.bank_name}
+          bankAccountNo={warehouse.creator.bank_account_no}
+          bankAccountName={warehouse.creator.bank_account_name}
+          title="Cảm Ơn Người Ghim Kho"
+          subtitle={
+            <>
+              Gửi chút cà phê cảm ơn bác tài{' '}
+              <strong className="text-orange-600">{warehouse.creator.full_name}</strong> đã ghim kho {warehouse.name}!
+            </>
+          }
+          transferMessage="Cam on bac tai ghim kho"
+        />
       )}
     </div>
   );

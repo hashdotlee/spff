@@ -222,15 +222,15 @@ export function VoiceNoteCard({
 
         {/* Action icons */}
         <div className="flex items-center gap-1 shrink-0">
-          {author?.bank_account_no && (
+          {author && currentUserId !== note.user_id && (
             <button
               type="button"
               onClick={() => setShowQRModal(true)}
-              className="p-1.5 sm:px-2.5 sm:py-1 text-rose-600 hover:bg-rose-50 rounded-xl transition text-xs font-semibold flex items-center gap-1 active:scale-95"
-              title="Cảm ơn bác tài qua VietQR"
+              className="min-h-[32px] px-2.5 py-1 text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl transition text-xs font-bold flex items-center gap-1.5 border border-rose-200 active:scale-95 shadow-2xs"
+              title="Cảm ơn người hướng dẫn"
             >
-              <Heart className="w-4 h-4 fill-rose-600 shrink-0" />
-              <span className="hidden xs:inline text-[11px]">Donate</span>
+              <Heart className="w-3.5 h-3.5 fill-rose-600 text-rose-600 shrink-0" />
+              <span>Cảm ơn</span>
             </button>
           )}
 
@@ -308,6 +308,18 @@ export function VoiceNoteCard({
         </span>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          {author && currentUserId !== note.user_id && (
+            <button
+              type="button"
+              onClick={() => setShowQRModal(true)}
+              className="min-h-[36px] px-2.5 py-1 rounded-xl border border-rose-200 bg-rose-50/80 hover:bg-rose-100 text-rose-700 font-bold flex items-center gap-1 transition active:scale-95"
+              title="Mời cà phê cảm ơn người hướng dẫn"
+            >
+              <Heart className="w-3.5 h-3.5 fill-rose-600 text-rose-600 shrink-0" />
+              <span className="text-[11px]">Cảm ơn</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => handleVote(1)}
@@ -336,7 +348,7 @@ export function VoiceNoteCard({
         </div>
       </div>
 
-      {/* Donate VietQR Modal */}
+      {/* Thank Guide VietQR Modal */}
       {author && (
         <VietQRModal
           isOpen={showQRModal}
@@ -345,6 +357,14 @@ export function VoiceNoteCard({
           bankName={author.bank_name}
           bankAccountNo={author.bank_account_no}
           bankAccountName={author.bank_account_name}
+          title="Cảm Ơn Người Hướng Dẫn"
+          subtitle={
+            <>
+              Gửi chút cà phê cảm ơn bác tài{' '}
+              <strong className="text-orange-600">{author.full_name}</strong> vì lời chỉ dẫn hữu ích!
+            </>
+          }
+          transferMessage="Cam on chi dan bac tai"
         />
       )}
 

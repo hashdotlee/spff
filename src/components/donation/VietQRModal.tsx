@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { getVietQRImageUrl } from '@/lib/utils/vietqr';
 import { Copy, Check, X, Heart, CreditCard } from 'lucide-react';
 
@@ -11,6 +11,9 @@ interface VietQRModalProps {
   bankName: string | null;
   bankAccountNo: string | null;
   bankAccountName: string | null;
+  title?: string;
+  subtitle?: ReactNode;
+  transferMessage?: string;
 }
 
 export function VietQRModal({
@@ -20,6 +23,9 @@ export function VietQRModal({
   bankName,
   bankAccountNo,
   bankAccountName,
+  title = 'Ủng Hộ & Cảm Ơn Tài Xế',
+  subtitle,
+  transferMessage = 'Cam on bac tai SPFF',
 }: VietQRModalProps) {
   const [copied, setCopied] = useState(false);
   const [selectedAmount, setSelectedAmount] = useState<number | undefined>(undefined);
@@ -34,7 +40,7 @@ export function VietQRModal({
         accountNo: bankAccountNo!,
         accountName: bankAccountName || undefined,
         amount: selectedAmount,
-        message: 'Cam on bac tai SPFF',
+        message: transferMessage,
       })
     : '';
 
@@ -70,11 +76,15 @@ export function VietQRModal({
             <Heart className="w-5 h-5 fill-red-600" />
           </div>
           <h3 className="text-base sm:text-lg font-bold text-slate-900">
-            Ủng Hộ & Cảm Ơn Tài Xế
+            {title}
           </h3>
           <p className="text-xs text-slate-600 mt-0.5">
-            Gửi chút cà phê / nước mía cho đồng nghiệp{' '}
-            <strong className="text-orange-600">{driverName}</strong>
+            {subtitle || (
+              <>
+                Gửi chút cà phê / nước mía cho đồng nghiệp{' '}
+                <strong className="text-orange-600">{driverName}</strong>
+              </>
+            )}
           </p>
         </div>
 
@@ -165,9 +175,12 @@ export function VietQRModal({
             </button>
           </div>
         ) : (
-          <div className="py-8 text-center text-slate-500">
+          <div className="py-7 text-center text-slate-500 space-y-1">
             <CreditCard className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-            <p className="text-sm">Tài xế này chưa cập nhật thông tin VietQR.</p>
+            <p className="text-sm font-bold text-slate-800">Tài xế này chưa cập nhật thông tin VietQR</p>
+            <p className="text-xs text-slate-500">
+              Đồng nghiệp có thể gửi lời cảm ơn bằng cách nhấn đánh giá hữu ích hoặc gửi lời nhắn trực tiếp!
+            </p>
           </div>
         )}
       </div>

@@ -130,10 +130,10 @@ export default function LeaderboardPage() {
                     <button
                       onClick={() => setDonateDriver(driver)}
                       className="min-h-[36px] p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition border border-rose-200 text-xs font-semibold flex items-center gap-1 active:scale-95"
-                      title="Quét VietQR mời cà phê"
+                      title="Cảm ơn bác tài qua VietQR"
                     >
                       <Heart className="w-4 h-4 fill-rose-600 shrink-0" />
-                      <span className="hidden xs:inline">Donate</span>
+                      <span className="hidden xs:inline">Cảm ơn</span>
                     </button>
                   )}
 
