@@ -6,6 +6,10 @@
 ALTER TABLE public.warehouses 
 ADD COLUMN IF NOT EXISTS image_url TEXT;
 
+-- Thêm cột audio_url cho bảng incidents (Voice note hướng dẫn sự cố khẩn cấp)
+ALTER TABLE public.incidents 
+ADD COLUMN IF NOT EXISTS audio_url TEXT;
+
 -- 2. Bảng Incidents (Sự cố cứu hộ xe trên đường: hỏng xe, hết xăng, thủng lốp...)
 CREATE TABLE IF NOT EXISTS public.incidents (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

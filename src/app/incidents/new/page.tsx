@@ -1,14 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import type { IncidentType } from '@/types/database';
-import { PhotoCapture } from '@/components/common/PhotoCapture';
 import { uploadImageToSupabase } from '@/lib/utils/imageUpload';
+import { QuickVoiceInput } from '@/components/voice/QuickVoiceInput';
 import {
+  Camera,
+  Image as ImageIcon,
+  ArrowLeft,
+  CheckCircle2,
+  RefreshCw,
+  Send,
+  AlertCircle,
+  Loader2,
+  Phone,
+  Siren,
   Wrench,
   Fuel,
   Disc,
@@ -16,86 +25,41 @@ import {
   AlertTriangle,
   HelpCircle,
   MapPin,
-  Phone,
-  AlertCircle,
-  ArrowLeft,
-  Send,
-  Siren,
-  Check,
+  ListOrdered,
 } from 'lucide-react';
 
-const LocationPicker = dynamic(() => import('@/components/map/LocationPicker'), {
-  ssr: false,
-  loading: () => (
-    <div className="h-64 w-full rounded-2xl bg-slate-100 border border-slate-200 animate-pulse flex flex-col items-center justify-center text-xs text-slate-500 gap-2">
-      <div className="w-6 h-6 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
-      <span>Đang tải bản đồ xác định tọa độ sự cố...</span>
-    </div>
-  ),
-});
-
-const INCIDENT_TYPES: { type: IncidentType; label: string; icon: any; defaultTitle: string; defaultDesc: string }[] = [
-  {
-    type: 'out_of_gas',
-    label: 'Hết xăng / dầu',
-    icon: Fuel,
-    defaultTitle: 'Hết xăng xe cần mua hộ hoặc chia sẻ xăng',
-    defaultDesc: 'Xe mình hết xăng/dầu giữa đường, cần anh em đi ngang qua chia lại ít xăng hoặc mua giúp chai xăng. Mình xin gửi thêm tiền cà phê cảm ơn.',
-  },
-  {
-    type: 'broken_vehicle',
-    label: 'Hỏng xe / chết máy',
-    icon: Wrench,
-    defaultTitle: 'Xe hỏng máy / đứt xích cần hỗ trợ đồ nghề',
-    defaultDesc: 'Xe đang chở hàng thì bị chết máy / hỏng hóc, cần bác tài có đồ nghề hoặc biết sửa chữa gần đây ghé qua kiểm tra hỗ trợ.',
-  },
-  {
-    type: 'flat_tire',
-    label: 'Thủng / nổ lốp',
-    icon: Disc,
-    defaultTitle: 'Thủng lốp cần mượn bơm hơi / kích nâng',
-    defaultDesc: 'Xe bị cán đinh xẹp lốp, cần mượn bơm điện hoặc kích nâng để thay lốp dự phòng.',
-  },
-  {
-    type: 'battery_dead',
-    label: 'Hết ắc quy',
-    icon: Zap,
-    defaultTitle: 'Chết bình ắc quy cần nhờ câu bình',
-    defaultDesc: 'Xe bị hết bình ắc quy đề không lên, bác nào có dây câu bình hoặc bình phụ đi qua hỗ trợ mình với nhé.',
-  },
-  {
-    type: 'accident',
-    label: 'Va chạm / Sự cố',
-    icon: AlertTriangle,
-    defaultTitle: 'Gặp sự cố va chạm trên đường',
-    defaultDesc: 'Gặp sự cố va chạm cần anh em đồng nghiệp gần khu vực hỗ trợ làm chứng hoặc hỗ trợ hiện trường.',
-  },
-  {
-    type: 'other',
-    label: 'Sự cố khác',
-    icon: HelpCircle,
-    defaultTitle: 'Cần hỗ trợ sự cố khẩn cấp trên đường',
-    defaultDesc: 'Đang gặp sự cố khẩn cấp trên hành trình di chuyển, rất mong nhận được sự trợ giúp từ anh em đồng nghiệp.',
-  },
+const INCIDENT_TYPES: { type: IncidentType; label: string; icon: any }[] = [
+  { type: 'broken_vehicle', label: 'Hỏng xe', icon: Wrench },
+  { type: 'out_of_gas', label: 'Hết xăng / dầu', icon: Fuel },
+  { type: 'flat_tire', label: 'Thủng / nổ lốp', icon: Disc },
+  { type: 'battery_dead', label: 'Hết ắc quy', icon: Zap },
+  { type: 'accident', label: 'Va chạm sự cố', icon: AlertTriangle },
+  { type: 'other', label: 'Sự cố khác', icon: HelpCircle },
 ];
 
 export default function NewIncidentPage() {
   const router = useRouter();
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [incidentType, setIncidentType] = useState<IncidentType>('broken_vehicle');
-  const [title, setTitle] = useState(INCIDENT_TYPES[1].defaultTitle);
-  const [description, setDescription] = useState(INCIDENT_TYPES[1].defaultDesc);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioDuration, setAudioDuration] = useState<number>(0);
   const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
+  const [noteText, setNoteText] = useState('');
   const [lat, setLat] = useState(21.0285);
   const [lng, setLng] = useState(105.8542);
-  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  const [gpsReady, setGpsReady] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [statusText, setStatusText] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const supabase = createClient();
 
-  // Load user profile & auto-get GPS location
+  // 1. Tự động kiểm tra user, nạp SĐT có sẵn & lấy GPS ngầm
   useEffect(() => {
     supabase.auth.getUser().then(async (res: any) => {
       const user = res.data?.user;
@@ -104,7 +68,6 @@ export default function NewIncidentPage() {
         return;
       }
 
-      // Pre-fill phone if available in profile
       const { data: profile } = await supabase
         .from('profiles')
         .select('phone')
@@ -116,44 +79,65 @@ export default function NewIncidentPage() {
       }
     });
 
-    if (navigator.geolocation) {
+    if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setLat(pos.coords.latitude);
           setLng(pos.coords.longitude);
+          setGpsReady(true);
         },
-        () => {},
+        (err) => {
+          console.warn('Geolocation error:', err);
+          setGpsReady(true);
+        },
         { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
       );
     }
   }, [supabase, router]);
 
-  function handleSelectType(type: IncidentType) {
-    setIncidentType(type);
-    const item = INCIDENT_TYPES.find((t) => t.type === type);
-    if (item) {
-      setTitle(item.defaultTitle);
-      setDescription(item.defaultDesc);
-    }
+  // 2. Xử lý khi chọn hoặc chụp ảnh hiện trường
+  function handlePhotoCaptured(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setErrorMsg(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    setPhotoBlob(file);
+    e.target.value = '';
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function handleRetakePhoto() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setPhotoBlob(null);
+  }
+
+  // 3. Phát tín hiệu SOS cứu hộ
+  async function handleSubmit(e?: React.FormEvent) {
+    if (e) e.preventDefault();
     setErrorMsg(null);
 
-    // BẮT BUỘC có ảnh tại hiện trường theo yêu cầu!
-    if (!photoBlob) {
-      setErrorMsg('Báo cáo phải có ảnh chụp tại hiện trường để chứng minh sự cố.');
+    const cleanPhone = phone.trim();
+    if (!cleanPhone) {
+      setErrorMsg('Vui lòng nhập số điện thoại để đồng nghiệp đến nơi còn gọi ứng cứu!');
       return;
     }
 
-    if (!phone.trim()) {
-      setErrorMsg('Vui lòng nhập số điện thoại để đồng nghiệp có thể gọi cứu hộ.');
+    if (cleanPhone.replace(/\D/g, '').length < 9) {
+      setErrorMsg('Số điện thoại chưa hợp lệ. Vui lòng nhập số có ít nhất 9-10 chữ số.');
+      return;
+    }
+
+    if (!photoBlob) {
+      setErrorMsg('Vui lòng chụp ảnh hiện trường xe gặp sự cố để đồng nghiệp chuẩn bị đồ hỗ trợ.');
       return;
     }
 
     setLoading(true);
-    setStatusText('Đang nén và tải ảnh hiện trường lên (tiết kiệm 4G)...');
+    setStatusText('Đang nén ảnh hiện trường...');
 
     try {
       const {
@@ -161,234 +145,379 @@ export default function NewIncidentPage() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        setErrorMsg('Vui lòng đăng nhập để gửi báo cáo sự cố.');
+        setErrorMsg('Vui lòng đăng nhập để phát tín hiệu SOS.');
+        setLoading(false);
         return;
       }
 
-      // 1. Upload ảnh hiện trường (tự động nén trước khi gửi, primary: incident-photos, fallback: avatars)
-      const fileName = `${user.id}_${Date.now()}.jpg`;
+      // Lưu / cập nhật SĐT vào profile để các lần sau không cần nhập lại
+      await supabase
+        .from('profiles')
+        .update({ phone: cleanPhone })
+        .eq('id', user.id);
+
+      // A. Upload ảnh hiện trường
+      setStatusText('Đang tải ảnh hiện trường lên...');
+      const photoFileName = `${user.id}_${Date.now()}.jpg`;
       const uploadedPhotoUrl = await uploadImageToSupabase(supabase, photoBlob, {
         primaryBucket: 'incident-photos',
-        fileName,
+        fileName: photoFileName,
         fallbackBucket: 'avatars',
         compress: true,
       });
 
-      setStatusText('Đang phát tín hiệu SOS tới đồng nghiệp...');
+      // B. Upload file âm thanh nếu có thu âm
+      let uploadedAudioUrl: string | null = null;
+      if (audioBlob) {
+        try {
+          setStatusText('Đang lưu lời nhắn âm thanh...');
+          const fileExt = audioBlob.type.includes('mp4') ? 'm4a' : 'webm';
+          const audioFileName = `incidents/${user.id}_${Date.now()}.${fileExt}`;
 
-      // 2. Insert vào bảng incidents
-      const { data, error } = await supabase
+          const { data: uploadAudioData, error: uploadAudioError } = await supabase.storage
+            .from('voice-notes')
+            .upload(audioFileName, audioBlob, {
+              contentType: audioBlob.type || 'audio/webm',
+              cacheControl: '3600',
+              upsert: true,
+            });
+
+          if (!uploadAudioError && uploadAudioData) {
+            const {
+              data: { publicUrl },
+            } = supabase.storage.from('voice-notes').getPublicUrl(uploadAudioData.path);
+            uploadedAudioUrl = publicUrl;
+          }
+        } catch (audioErr) {
+          console.warn('Lỗi tải âm thanh sự cố, tiếp tục tạo SOS:', audioErr);
+        }
+      }
+
+      // Tiêu đề & Mô tả tự động chuẩn hóa
+      const typeObj = INCIDENT_TYPES.find((t) => t.type === incidentType);
+      const typeLabel = typeObj ? typeObj.label : 'Sự cố xe';
+      const now = new Date();
+      const timeStr = `${now.getHours()}h${String(now.getMinutes()).padStart(2, '0')}`;
+      const title = `SOS: Xe gặp sự cố ${typeLabel.toLowerCase()} (${timeStr})`;
+
+      let description = noteText.trim();
+      if (!description) {
+        description = uploadedAudioUrl
+          ? 'Tài xế đã gửi ảnh hiện trường và ghi âm chỉ dẫn cứu hộ.'
+          : 'Tài xế đang gặp sự cố khẩn cấp trên đường cần anh em đồng nghiệp hỗ trợ gấp.';
+      }
+
+      // C. Insert vào bảng incidents
+      setStatusText('Đang phát tín hiệu SOS khẩn cấp...');
+      const insertPayload: any = {
+        user_id: user.id,
+        title,
+        incident_type: incidentType,
+        description,
+        latitude: lat,
+        longitude: lng,
+        photo_url: uploadedPhotoUrl,
+        phone: cleanPhone,
+        status: 'open',
+        helper_count: 0,
+      };
+
+      if (uploadedAudioUrl) {
+        insertPayload.audio_url = uploadedAudioUrl;
+      }
+
+      let { data, error } = await supabase
         .from('incidents')
-        .insert({
-          user_id: user.id,
-          title: title.trim(),
-          incident_type: incidentType,
-          description: description.trim(),
-          latitude: lat,
-          longitude: lng,
-          address: address.trim() || null,
-          photo_url: uploadedPhotoUrl,
-          phone: phone.trim(),
-          status: 'open',
-          helper_count: 0,
-        })
+        .insert(insertPayload)
         .select()
         .single();
 
+      // Nếu cột audio_url chưa có trong DB (lỗi 42703), fallback thêm URL vào mô tả
+      if (error && (error.code === '42703' || error.message.includes('audio_url'))) {
+        delete insertPayload.audio_url;
+        if (uploadedAudioUrl) {
+          insertPayload.description = `${description}\n[Voice]: ${uploadedAudioUrl}`;
+        }
+        const retryResult = await supabase
+          .from('incidents')
+          .insert(insertPayload)
+          .select()
+          .single();
+        data = retryResult.data;
+        error = retryResult.error;
+      }
+
       if (error) {
-        console.error('Lỗi tạo sự cố:', error);
-        setErrorMsg(
-          error.message.includes('incidents')
-            ? 'Bảng dữ liệu sự cố chưa được kích hoạt trên hệ thống. Vui lòng chạy file SQL migration.'
-            : error.message
-        );
-        return;
+        throw new Error(error.message);
       }
 
       if (data) {
         router.push(`/incidents/${data.id}`);
       }
     } catch (err: any) {
-      console.error('Lỗi gửi báo cáo SOS:', err);
-      setErrorMsg(err?.message || 'Đã xảy ra lỗi khi phát tín hiệu SOS. Vui lòng thử lại.');
-    } finally {
+      console.error('Lỗi phát tín hiệu SOS:', err);
+      setErrorMsg(err?.message || 'Đã có lỗi xảy ra khi phát SOS. Vui lòng thử lại.');
       setLoading(false);
       setStatusText(null);
     }
   }
 
   return (
-    <div className="p-3 sm:p-6 max-w-xl mx-auto w-full">
+    <div className="p-3 sm:p-6 max-w-lg mx-auto w-full space-y-4">
+      {/* Hidden file inputs for direct camera or file pick */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handlePhotoCaptured}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handlePhotoCaptured}
+      />
+
       {/* Top Header */}
-      <div className="flex items-center gap-2.5 sm:gap-3 mb-4 sm:mb-5">
-        <Link
-          href="/incidents"
-          className="p-2 -ml-1.5 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition active:scale-95"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <div>
-          <h1 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <span className="p-1.5 bg-red-600 text-white rounded-xl shadow-xs">
-              <Siren className="w-5 h-5 animate-pulse" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Link
+            href="/incidents"
+            className="p-2 -ml-1 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition active:scale-95"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div>
+            <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight flex items-center gap-1.5">
+              <span className="p-1 bg-red-600 text-white rounded-lg">
+                <Siren className="w-4 h-4 animate-pulse" />
+              </span>
+              <span>Cứu Hộ Khẩn Cấp (SOS)</span>
+            </h1>
+            <span className="text-[11px] text-slate-500 block -mt-0.5">
+              Phát tín hiệu cứu trợ anh em đồng nghiệp
             </span>
-            <span>Báo Sự Cố Khẩn Cấp (SOS)</span>
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">Tìm kiếm sự trợ giúp từ đồng nghiệp đang ở gần bạn</p>
+          </div>
+        </div>
+
+        {/* View Feed Link & GPS Indicator */}
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-xl border border-emerald-200">
+            <MapPin className="w-3 h-3 text-emerald-600" />
+            <span>{gpsReady ? 'GPS Sẵn sàng' : 'Lấy GPS...'}</span>
+          </div>
+          <Link
+            href="/incidents"
+            className="text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-xl border border-red-200 transition active:scale-95 flex items-center gap-1 shrink-0"
+          >
+            <ListOrdered className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">DS Sự Cố</span>
+          </Link>
         </div>
       </div>
 
       {errorMsg && (
-        <div className="mb-4 sm:mb-5 p-3 sm:p-3.5 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5 text-red-700 text-xs sm:text-sm shadow-xs">
-          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-600" />
-          <span>{errorMsg}</span>
+        <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2.5 text-red-700 text-xs shadow-xs">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+          <span className="font-medium">{errorMsg}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5 bg-white p-4 sm:p-6 rounded-3xl border border-red-200/80 shadow-sm">
-        {/* Step 1: Chọn loại sự cố */}
-        <div>
-          <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-            1. Bạn đang gặp sự cố gì? *
+      {/* ======================================================== */}
+      {/* 1. SỐ ĐIỆN THOẠI GỌI CỨU HỘ (ĐỂ NGƯỜI ĐẾN CÒN GỌI)       */}
+      {/* ======================================================== */}
+      <div className="bg-white p-4 sm:p-5 rounded-3xl border-2 border-emerald-300 shadow-sm">
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+            <Phone className="w-4 h-4 text-emerald-600" />
+            <span>Số điện thoại gọi cứu hộ *</span>
           </label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {INCIDENT_TYPES.map((item) => {
-              const Icon = item.icon;
-              const isSelected = incidentType === item.type;
-              return (
-                <button
-                  type="button"
-                  key={item.type}
-                  onClick={() => handleSelectType(item.type)}
-                  className={`p-3 rounded-2xl border text-left transition active:scale-95 flex flex-col justify-between gap-2 cursor-pointer ${
-                    isSelected
-                      ? 'border-red-600 bg-red-50/70 ring-2 ring-red-500/20 text-red-950 font-bold'
-                      : 'border-slate-200 hover:border-slate-300 bg-slate-50/50 text-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div
-                      className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                        isSelected ? 'bg-red-600 text-white shadow-xs' : 'bg-slate-200 text-slate-700'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    {isSelected && <Check className="w-4 h-4 text-red-600 font-bold" />}
-                  </div>
-                  <span className="text-xs leading-snug">{item.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Step 2: Ảnh chụp tại hiện trường (BẮT BUỘC) */}
-        <div className="p-3.5 bg-red-50/50 border border-red-200 rounded-2xl">
-          <PhotoCapture
-            label="2. Ảnh chụp tại hiện trường (Bắt buộc)"
-            helperText="Yêu cầu chụp ảnh xe gặp sự cố, bình xăng, lốp hỏng... để chứng minh hiện trường thực tế và giúp đồng nghiệp chuẩn bị dụng cụ phù hợp."
-            required={true}
-            onPhotoSelected={(blob) => setPhotoBlob(blob)}
-          />
-        </div>
-
-        {/* Step 3: Tiêu đề & Mô tả */}
-        <div>
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-            Tiêu đề tóm tắt *
-          </label>
-          <input
-            type="text"
-            required
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="VD: Xe máy hết xăng đoạn cầu Thăng Long"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-base sm:text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-            Mô tả chi tiết cần hỗ trợ gì *
-          </label>
-          <textarea
-            rows={3}
-            required
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Mô tả cụ thể để đồng nghiệp mang đúng đồ giúp bạn..."
-            className="w-full p-3 rounded-xl border border-slate-300 text-base sm:text-sm focus:ring-2 focus:ring-red-500 focus:outline-none leading-relaxed"
-          />
-        </div>
-
-        {/* Step 4: Số điện thoại liên hệ */}
-        <div>
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-            <Phone className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Số điện thoại liên hệ khẩn cấp *</span>
-          </label>
-          <input
-            type="tel"
-            required
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="VD: 0987654321"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-base sm:text-sm focus:ring-2 focus:ring-red-500 focus:outline-none font-semibold"
-          />
-          <span className="text-[11px] text-slate-500 mt-1 block">
-            Đồng nghiệp ở gần sẽ gọi số này để thông báo ứng cứu.
+          <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1">
+            <span>Để người đến còn gọi</span>
+            <span>📞</span>
           </span>
         </div>
 
-        {/* Step 5: Tọa độ & Bản đồ */}
-        <div>
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-            <MapPin className="w-3.5 h-3.5 text-red-600" />
-            <span>Vị trí sự cố trên bản đồ *</span>
-          </label>
-          <LocationPicker
-            initialLat={lat}
-            initialLng={lng}
-            onLocationChange={(newLat, newLng) => {
-              setLat(newLat);
-              setLng(newLng);
-            }}
-          />
-        </div>
+        <input
+          type="tel"
+          required
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="VD: 0987654321..."
+          className="w-full px-4 py-3 rounded-2xl border-2 border-slate-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/10 focus:outline-none text-base font-black text-slate-900 bg-emerald-50/20 placeholder:text-slate-400 placeholder:font-normal transition shadow-xs"
+        />
 
-        <div>
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-            Mốc đường / Điểm nhận diện (nếu có)
-          </label>
-          <input
-            type="text"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="VD: Trước cây xăng số 3, đối diện cổng KCN..."
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-base sm:text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
-          />
-        </div>
+        <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+          💡 Đồng nghiệp khi nhìn thấy tin SOS hoặc đến gần hiện trường sẽ bấm nút để gọi trực tiếp vào số này.
+        </p>
+      </div>
 
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full min-h-[50px] py-3.5 px-4 bg-gradient-to-r from-red-600 via-rose-600 to-orange-600 hover:from-red-700 hover:to-orange-700 active:scale-[0.99] text-white font-extrabold rounded-2xl shadow-lg shadow-red-600/30 transition flex items-center justify-center gap-2 disabled:opacity-50 text-sm cursor-pointer"
-        >
-          {loading ? (
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              <span>{statusText || 'Đang gửi tín hiệu SOS...'}</span>
-            </div>
+      {/* ======================================================== */}
+      {/* 2. LOẠI SỰ CỐ GẶP PHẢI                                    */}
+      {/* ======================================================== */}
+      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs">
+        <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
+          Loại sự cố gặp phải
+        </label>
+        <div className="grid grid-cols-3 gap-1.5">
+          {INCIDENT_TYPES.map((item) => {
+            const Icon = item.icon;
+            const isSelected = incidentType === item.type;
+            return (
+              <button
+                key={item.type}
+                type="button"
+                onClick={() => setIncidentType(item.type)}
+                className={`p-2.5 rounded-2xl border text-center transition active:scale-95 flex flex-col items-center justify-center gap-1.5 cursor-pointer ${
+                  isSelected
+                    ? 'border-red-600 bg-red-600 text-white font-black shadow-xs'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Icon className="w-4 h-4 shrink-0" />
+                <span className="text-[11px] leading-tight truncate w-full">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ======================================================== */}
+      {/* 3. ẢNH HIỆN TRƯỜNG XE GẶP SỰ CỐ                           */}
+      {/* ======================================================== */}
+      <div className="bg-white p-4 sm:p-5 rounded-3xl border border-red-200/90 shadow-xs">
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+            <Camera className="w-4 h-4 text-red-600" />
+            <span>Ảnh hiện trường sự cố *</span>
+          </label>
+          {photoBlob ? (
+            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              <span>Đã có ảnh</span>
+            </span>
           ) : (
-            <>
-              <Send className="w-5 h-5" />
-              <span>Phát Tín Hiệu Cứu Hộ SOS 🚨</span>
-            </>
+            <span className="text-[10px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-full border border-red-200">
+              Bắt buộc
+            </span>
           )}
-        </button>
-      </form>
+        </div>
+
+        {!photoBlob ? (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              className="w-full py-5 px-4 rounded-2xl border-2 border-dashed border-red-300 bg-gradient-to-b from-red-50/70 to-rose-50/40 hover:bg-red-100/60 transition active:scale-98 flex flex-col items-center justify-center gap-2 cursor-pointer group shadow-2xs"
+            >
+              <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-red-600 via-rose-600 to-orange-600 text-white flex items-center justify-center shadow-md shadow-red-600/30 group-hover:scale-105 transition">
+                <Camera className="w-6 h-6 animate-pulse" />
+              </div>
+              <div className="text-center">
+                <span className="text-xs sm:text-sm font-black text-red-950 block">
+                  BẬT CAMERA CHỤP HIỆN TRƯỜNG 📸
+                </span>
+                <span className="text-[11px] text-red-700/80 block mt-0.5">
+                  Chụp lốp, động cơ hoặc xe để đồng nghiệp chuẩn bị dụng cụ
+                </span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full py-2.5 text-center text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-xl border border-slate-200 transition flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <ImageIcon className="w-4 h-4 text-slate-400" />
+              <span>Hoặc chọn ảnh có sẵn trong thư viện ảnh</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 p-2.5 bg-red-50/60 border border-red-200 rounded-2xl">
+            <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-slate-900 shrink-0 border border-slate-200">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewUrl!}
+                alt="Ảnh hiện trường"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-bold text-emerald-700 flex items-center gap-1 truncate">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Đã chụp ảnh hiện trường</span>
+              </span>
+              <span className="text-[11px] text-slate-500 block truncate mt-0.5">
+                Chạm để chụp lại hoặc đổi ảnh khác
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleRetakePhoto}
+              className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition active:scale-95 flex items-center gap-1 shrink-0 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Đổi ảnh</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ======================================================== */}
+      {/* 4. THU ÂM CHỈ DẪN / TÌNH TRẠNG SỰ CỐ                     */}
+      {/* ======================================================== */}
+      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs">
+        <QuickVoiceInput
+          label="Thu âm tình trạng sự cố (Nhanh nhất)"
+          helperText="Nói nhanh: Vị trí làn đường, cần mượn đồ gì, cần hỗ trợ gì..."
+          accentColor="red"
+          onAudioChange={(blob, duration) => {
+            setAudioBlob(blob);
+            setAudioDuration(duration);
+          }}
+        />
+      </div>
+
+      {/* ======================================================== */}
+      {/* 5. GHI CHÚ BẰNG CHỮ (TÙY CHỌN)                           */}
+      {/* ======================================================== */}
+      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs">
+        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+          Ghi chú thêm bằng chữ (Tùy chọn)
+        </label>
+        <input
+          type="text"
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value)}
+          placeholder="VD: Xe tải 2.5T chết máy ở làn ngoài cùng chân cầu..."
+          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
+        />
+      </div>
+
+      {/* ======================================================== */}
+      {/* 6. NÚT PHÁT TÍN HIỆU SOS                                  */}
+      {/* ======================================================== */}
+      <button
+        type="button"
+        disabled={loading}
+        onClick={() => handleSubmit()}
+        className="w-full min-h-[52px] py-3.5 px-4 bg-gradient-to-r from-red-600 via-rose-600 to-orange-600 hover:from-red-700 hover:to-orange-700 active:scale-[0.99] text-white font-black rounded-2xl shadow-lg shadow-red-600/30 transition flex items-center justify-center gap-2 disabled:opacity-50 text-sm sm:text-base cursor-pointer"
+      >
+        {loading ? (
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span>{statusText || 'Đang phát tín hiệu SOS...'}</span>
+          </div>
+        ) : (
+          <>
+            <Send className="w-5 h-5" />
+            <span>Phát Tín Hiệu Cứu Hộ Ngay 🚨</span>
+          </>
+        )}
+      </button>
     </div>
   );
 }

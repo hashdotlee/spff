@@ -101,6 +101,9 @@ export function IncidentCard({
     minute: '2-digit',
   });
 
+  const hasAudio = Boolean(incident.audio_url || incident.description?.includes('[Voice]: '));
+  const cleanDescription = incident.description?.replace(/\[Voice\]:\s*.+$/, '').trim() || incident.description;
+
   return (
     <>
       <div className="bg-white rounded-2xl border border-red-200/80 hover:border-red-400 shadow-xs hover:shadow-md transition-all duration-200 overflow-hidden">
@@ -169,11 +172,17 @@ export function IncidentCard({
               </Link>
 
               <p className="text-xs text-slate-600 line-clamp-2 mt-1 leading-relaxed">
-                {incident.description}
+                {cleanDescription}
               </p>
 
-              {/* Distance and Address */}
+              {/* Distance, Address and Voice Badge */}
               <div className="mt-2 flex flex-wrap items-center gap-2">
+                {hasAudio && (
+                  <span className="font-bold text-orange-700 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200 text-[11px] flex items-center gap-1">
+                    <span>🎙️ Có voice chỉ dẫn</span>
+                  </span>
+                )}
+
                 {incident.distance_km !== undefined && (
                   <span className="font-black text-red-600 bg-red-50 px-2 py-0.5 rounded-md border border-red-200/80 text-[11px] sm:text-xs">
                     Cách bạn: {formatDistance(incident.distance_km)}
@@ -189,10 +198,13 @@ export function IncidentCard({
               </div>
 
               {/* Driver info */}
-              <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500">
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
                 <span className="text-slate-400">Tài xế:</span>
                 <span className="font-bold text-slate-800">
                   {incident.user?.full_name || 'Đồng nghiệp'}
+                </span>
+                <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-[10px]">
+                  📞 {incident.phone}
                 </span>
                 {isOwner && (
                   <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">

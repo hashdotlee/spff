@@ -1,64 +1,115 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
-import { MapPin, Plus, AlertCircle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { PhotoCapture } from '@/components/common/PhotoCapture';
+import { createClient } from '@/lib/supabase/client';
 import { uploadImageToSupabase } from '@/lib/utils/imageUpload';
-
-const LocationPicker = dynamic(() => import('@/components/map/LocationPicker'), {
-  ssr: false,
-  loading: () => (
-    <div className="h-64 w-full rounded-2xl bg-slate-100 border border-slate-200 animate-pulse flex flex-col items-center justify-center text-xs text-slate-500 gap-2">
-      <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-      <span>Đang tải bản đồ chọn vị trí...</span>
-    </div>
-  ),
-});
+import { QuickVoiceInput } from '@/components/voice/QuickVoiceInput';
+import {
+  Camera,
+  Image as ImageIcon,
+  ArrowLeft,
+  CheckCircle2,
+  RefreshCw,
+  Send,
+  AlertCircle,
+  Loader2,
+  MapPin,
+  Sparkles,
+} from 'lucide-react';
 
 export default function NewWarehousePage() {
   const router = useRouter();
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioDuration, setAudioDuration] = useState<number>(0);
   const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [description, setDescription] = useState('');
-  const [imageBlob, setImageBlob] = useState<Blob | null>(null);
   const [lat, setLat] = useState(21.0285);
   const [lng, setLng] = useState(105.8542);
+  const [gpsReady, setGpsReady] = useState(false);
+
   const [loading, setLoading] = useState(false);
-  const [uploadStatusText, setUploadStatusText] = useState<string | null>(null);
+  const [statusText, setStatusText] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const autoTriggeredRef = useRef(false);
 
   const supabase = createClient();
 
+  // 1. Tự động kiểm tra đăng nhập & lấy GPS ngầm
   useEffect(() => {
-    // Check auth
     supabase.auth.getUser().then((res: any) => {
       if (!res.data?.user) {
         router.push('/login?redirectTo=/warehouse/new');
       }
     });
 
-    // Try auto-getting current GPS position on load
-    if (navigator.geolocation) {
+    if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setLat(pos.coords.latitude);
           setLng(pos.coords.longitude);
+          setGpsReady(true);
         },
-        () => {},
-        { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
+        (err) => {
+          console.warn('Geolocation error:', err);
+          setGpsReady(true); // Vẫn tiếp tục với tọa độ mặc định
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
       );
     }
   }, [supabase, router]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  // 2. Tự động bật camera ngay khi mở trang
+  useEffect(() => {
+    if (!autoTriggeredRef.current && !photoBlob) {
+      autoTriggeredRef.current = true;
+      const timer = setTimeout(() => {
+        cameraInputRef.current?.click();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [photoBlob]);
+
+  // 3. Xử lý khi chụp xong ảnh
+  function handlePhotoCaptured(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
     setErrorMsg(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    setPhotoBlob(file);
+    e.target.value = '';
+  }
+
+  function handleRetakePhoto() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setPhotoBlob(null);
+    setTimeout(() => {
+      cameraInputRef.current?.click();
+    }, 50);
+  }
+
+  // 4. Đăng ngay (1 chạm)
+  async function handleSubmit(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    setErrorMsg(null);
+
+    if (!photoBlob) {
+      setErrorMsg('Vui lòng chụp ảnh bến bãi hoặc địa chỉ để hoàn tất ghim.');
+      return;
+    }
+
     setLoading(true);
-    setUploadStatusText('Đang kiểm tra thông tin...');
+    setStatusText('Đang nén ảnh hiện trường...');
 
     try {
       const {
@@ -66,184 +117,283 @@ export default function NewWarehousePage() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        setErrorMsg('Vui lòng đăng nhập để ghim kho mới.');
+        setErrorMsg('Vui lòng đăng nhập để ghim địa chỉ.');
+        setLoading(false);
         return;
       }
 
-      // 1. Upload ảnh nếu có chụp (tự động nén trước khi gửi)
-      let uploadedImageUrl: string | null = null;
-      if (imageBlob) {
-        try {
-          setUploadStatusText('Đang nén và tải ảnh cổng kho lên (tiết kiệm 4G)...');
-          const fileName = `${user.id}_${Date.now()}.jpg`;
-          uploadedImageUrl = await uploadImageToSupabase(supabase, imageBlob, {
-            primaryBucket: 'warehouse-images',
-            fileName,
-            fallbackBucket: 'avatars',
-            compress: true,
-          });
-        } catch (imgErr: any) {
-          console.warn('Không thể upload ảnh kho:', imgErr?.message);
-          // Không chặn tạo kho nếu upload ảnh bị lỗi
-        }
-      }
+      // Tên địa chỉ: nếu không nhập, tự đặt tên theo ngày giờ dễ nhận diện
+      const now = new Date();
+      const timeStr = `${now.getHours()}h${String(now.getMinutes()).padStart(2, '0')}`;
+      const finalName = name.trim() || `Điểm ghim bến bãi (${timeStr})`;
 
-      setUploadStatusText('Đang ghim kho lên bản đồ...');
+      // A. Tải ảnh lên Storage
+      setStatusText('Đang tải ảnh hiện trường lên...');
+      const photoFileName = `${user.id}_${Date.now()}.jpg`;
+      const uploadedImageUrl = await uploadImageToSupabase(supabase, photoBlob, {
+        primaryBucket: 'warehouse-images',
+        fileName: photoFileName,
+        fallbackBucket: 'avatars',
+        compress: true,
+      });
 
-      // 2. Thử insert có image_url
+      // B. Insert vào bảng warehouses
+      setStatusText('Đang ghim vị trí lên bản đồ...');
       const insertPayload: any = {
-        name: name.trim(),
-        address: address.trim() || null,
+        name: finalName,
         latitude: lat,
         longitude: lng,
-        description: description.trim() || null,
+        image_url: uploadedImageUrl,
         created_by: user.id,
         status: 'active',
       };
 
-      if (uploadedImageUrl) {
-        insertPayload.image_url = uploadedImageUrl;
-      }
-
-      let { data, error } = await supabase
+      let { data: whData, error: whError } = await supabase
         .from('warehouses')
         .insert(insertPayload)
         .select()
         .single();
 
-      // Nếu cột image_url chưa có trong DB (lỗi 42703), fallback insert không có image_url
-      if (error && (error.code === '42703' || error.message.includes('image_url'))) {
+      if (whError && (whError.code === '42703' || whError.message.includes('image_url'))) {
         delete insertPayload.image_url;
         const retryResult = await supabase
           .from('warehouses')
           .insert(insertPayload)
           .select()
           .single();
-        data = retryResult.data;
-        error = retryResult.error;
+        whData = retryResult.data;
+        whError = retryResult.error;
       }
 
-      if (error) {
-        setErrorMsg(error.message);
-        return;
+      if (whError || !whData) {
+        throw new Error(whError?.message || 'Không thể tạo bản ghi vị trí.');
       }
 
-      if (data) {
-        router.push(`/warehouse/${data.id}`);
+      // C. Nếu có thu âm chỉ dẫn, tải voice note lên và liên kết ngay
+      if (audioBlob) {
+        try {
+          setStatusText('Đang lưu chỉ dẫn bằng giọng nói...');
+          const fileExt = audioBlob.type.includes('mp4') ? 'm4a' : 'webm';
+          const audioFileName = `${whData.id}/${user.id}_${Date.now()}.${fileExt}`;
+
+          const { data: uploadAudioData, error: uploadAudioError } = await supabase.storage
+            .from('voice-notes')
+            .upload(audioFileName, audioBlob, {
+              contentType: audioBlob.type || 'audio/webm',
+              cacheControl: '3600',
+              upsert: true,
+            });
+
+          if (!uploadAudioError && uploadAudioData) {
+            const {
+              data: { publicUrl: audioPublicUrl },
+            } = supabase.storage.from('voice-notes').getPublicUrl(uploadAudioData.path);
+
+            await supabase.from('voice_notes').insert({
+              warehouse_id: whData.id,
+              user_id: user.id,
+              audio_url: audioPublicUrl,
+              duration_seconds: audioDuration || 1,
+              note_text: name.trim() || null,
+              status: 'active',
+            });
+          }
+        } catch (audioErr) {
+          console.warn('Lỗi lưu voice note, vẫn hoàn thành ghim kho:', audioErr);
+        }
       }
-    } catch {
-      setErrorMsg('Đã xảy ra lỗi khi tạo kho mới. Vui lòng thử lại.');
-    } finally {
+
+      // Hoàn tất -> chuyển thẳng đến trang chi tiết kho vừa tạo
+      router.push(`/warehouse/${whData.id}`);
+    } catch (err: any) {
+      console.error('Lỗi ghim địa chỉ:', err);
+      setErrorMsg(err?.message || 'Đã có lỗi xảy ra. Vui lòng thử lại.');
       setLoading(false);
-      setUploadStatusText(null);
+      setStatusText(null);
     }
   }
 
   return (
-    <div className="p-3 sm:p-6 max-w-xl mx-auto w-full">
-      <div className="flex items-center gap-2.5 sm:gap-3 mb-4 sm:mb-5">
-        <Link
-          href="/"
-          className="p-2 -ml-1.5 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition active:scale-95"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <h1 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
-          Ghim Vị Trí Kho Mới
-        </h1>
+    <div className="p-3 sm:p-6 max-w-lg mx-auto w-full">
+      {/* Hidden file inputs for direct camera or file pick */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handlePhotoCaptured}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handlePhotoCaptured}
+      />
+
+      {/* Top Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Link
+            href="/"
+            className="p-2 -ml-1 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition active:scale-95"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div>
+            <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight flex items-center gap-1.5">
+              <span>Ghim Địa Chỉ / Bến Bãi</span>
+            </h1>
+            <span className="text-[11px] text-slate-500 block -mt-0.5">
+              Chụp ảnh hiện trường → Thu âm chỉ dẫn → Đăng ngay
+            </span>
+          </div>
+        </div>
+
+        {/* GPS Status Indicator */}
+        <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-200 shrink-0">
+          <MapPin className="w-3 h-3 text-emerald-600" />
+          <span>{gpsReady ? 'GPS Sẵn sàng' : 'Đang lấy GPS...'}</span>
+        </div>
       </div>
 
       {errorMsg && (
-        <div className="mb-4 sm:mb-5 p-3 sm:p-3.5 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5 text-red-700 text-xs sm:text-sm">
-          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2.5 text-red-700 text-xs shadow-xs">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
           <span>{errorMsg}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5 bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-xs">
-        <div>
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-            Tên kho hàng / Bến bãi *
-          </label>
-          <input
-            type="text"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="VD: Kho Shopee Express Nam An Khánh"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-base sm:text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
-          />
-        </div>
+      {/* ======================================================== */}
+      {/* BƯỚC 1: CHỤP ẢNH (KHI CHƯA CÓ ẢNH)                       */}
+      {/* ======================================================== */}
+      {!photoBlob ? (
+        <div className="space-y-3.5 bg-white p-5 rounded-3xl border border-slate-200 shadow-sm text-center">
+          <div className="space-y-1">
+            <span className="px-2.5 py-0.5 bg-orange-100 text-orange-800 text-[10px] font-black uppercase tracking-wider rounded-full inline-block">
+              Bước 1 / 2: Chụp ảnh hiện trường
+            </span>
+            <h2 className="text-base sm:text-lg font-black text-slate-900">
+              Chụp Cổng Kho / Địa Chỉ
+            </h2>
+            <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
+              Bác tài chụp biển hiệu bến bãi, cổng vào hoặc mốc nhận diện để anh em đến nơi thấy ngay.
+            </p>
+          </div>
 
-        <div>
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-            Địa chỉ chi tiết (nếu biết)
-          </label>
-          <input
-            type="text"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="VD: Cổng số 2, KĐT Nam An Khánh, Hoài Đức, Hà Nội"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-base sm:text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
-          />
-        </div>
+          {/* Large prominent shutter card */}
+          <div className="py-4">
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              className="w-full py-8 px-4 rounded-3xl border-2 border-dashed border-orange-400 bg-gradient-to-b from-orange-50/80 to-amber-50/50 hover:bg-orange-100/60 transition active:scale-98 flex flex-col items-center justify-center gap-3 cursor-pointer group shadow-sm"
+            >
+              <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-orange-600 to-amber-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/30 group-hover:scale-105 transition">
+                <Camera className="w-10 h-10 animate-pulse" />
+              </div>
+              <div>
+                <span className="text-sm font-black text-orange-950 block">
+                  BẬT CAMERA CHỤP NGAY 📸
+                </span>
+                <span className="text-[11px] text-orange-700/80 mt-0.5 block">
+                  Chạm vào đây để mở máy ảnh điện thoại
+                </span>
+              </div>
+            </button>
+          </div>
 
-        <div>
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-            <MapPin className="w-3.5 h-3.5 text-orange-600" />
-            <span>Chọn tọa độ cổng vào trên bản đồ *</span>
-          </label>
-          <LocationPicker
-            initialLat={lat}
-            initialLng={lng}
-            onLocationChange={(newLat, newLng) => {
-              setLat(newLat);
-              setLng(newLng);
-            }}
-          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 p-2 rounded-xl transition cursor-pointer"
+          >
+            <ImageIcon className="w-4 h-4 text-slate-400" />
+            <span>Hoặc chọn ảnh có sẵn trong máy</span>
+          </button>
         </div>
-
-        <div>
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-            Lưu ý đường vào & Quy định bãi
-          </label>
-          <textarea
-            rows={3}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="VD: Xe 5 tấn vào thoải mái, quay đầu trong sân kho. Lưu ý giờ cao điểm 6h30-8h30 sáng hay bị CSGT kiểm tra..."
-            className="w-full p-3 rounded-xl border border-slate-300 text-base sm:text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
-          />
-        </div>
-
-        {/* Chụp ảnh cổng kho / hiện trường */}
-        <div className="pt-1 border-t border-slate-100">
-          <PhotoCapture
-            label="Chụp ảnh cổng kho / Biển hiệu bến bãi"
-            helperText="Khuyên dùng: Bác tài chụp ảnh cổng bến bãi hoặc cột mốc dễ nhìn để anh em đồng nghiệp đến nơi nhận diện ngay."
-            required={false}
-            onPhotoSelected={(blob) => setImageBlob(blob)}
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full min-h-[48px] py-3.5 px-4 bg-orange-600 hover:bg-orange-700 active:scale-[0.99] text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 text-sm cursor-pointer"
-        >
-          {loading ? (
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              <span>{uploadStatusText || 'Đang ghim kho lên bản đồ...'}</span>
+      ) : (
+        /* ======================================================== */
+        /* BƯỚC 2: CHỈ DẪN & ĐĂNG NGAY (KHI ĐÃ CÓ ẢNH)              */
+        /* ======================================================== */
+        <div className="space-y-4 bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-sm animate-in fade-in">
+          {/* Photo Preview Strip */}
+          <div className="flex items-center gap-3 p-2.5 bg-slate-50 border border-slate-200/80 rounded-2xl">
+            <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-slate-900 shrink-0 border border-slate-200">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewUrl!}
+                alt="Ảnh hiện trường"
+                className="w-full h-full object-cover"
+              />
             </div>
-          ) : (
-            <>
-              <Plus className="w-5 h-5" />
-              <span>Ghim Kho & Thu Âm Chỉ Dẫn</span>
-            </>
-          )}
-        </button>
-      </form>
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Đã chụp ảnh hiện trường</span>
+              </span>
+              <span className="text-[11px] text-slate-500 block truncate">
+                Tọa độ GPS đã tự động lưu
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleRetakePhoto}
+              className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition active:scale-95 flex items-center gap-1 shrink-0 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Chụp lại</span>
+            </button>
+          </div>
+
+          {/* Quick Voice Recorder */}
+          <div className="pt-1">
+            <QuickVoiceInput
+              label="Ghi âm chỉ dẫn đường vào"
+              helperText="Thu âm bằng giọng nói: Tên ngõ, cổng phụ, biển hiệu hoặc lưu ý xe tải..."
+              accentColor="orange"
+              onAudioChange={(blob, duration) => {
+                setAudioBlob(blob);
+                setAudioDuration(duration);
+              }}
+            />
+          </div>
+
+          {/* Optional Text Input */}
+          <div className="pt-1 border-t border-slate-100">
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              Tên địa chỉ / Ghi chú bằng chữ (Tùy chọn)
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="VD: Cổng 2 Kho Shopee Nam An Khánh..."
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
+            />
+          </div>
+
+          {/* Submit Button (Đăng luôn) */}
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => handleSubmit()}
+            className="w-full min-h-[50px] py-3.5 px-4 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 active:scale-[0.99] text-white font-extrabold rounded-2xl shadow-lg shadow-orange-500/25 transition flex items-center justify-center gap-2 disabled:opacity-50 text-sm cursor-pointer mt-2"
+          >
+            {loading ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>{statusText || 'Đang đăng địa chỉ...'}</span>
+              </div>
+            ) : (
+              <>
+                <Send className="w-4 h-4" />
+                <span>Đăng Ghim Địa Chỉ Ngay 🚀</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

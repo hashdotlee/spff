@@ -182,9 +182,10 @@ export default function HomePage() {
         <Link
           href="/warehouse/new"
           className="py-2.5 px-3 sm:px-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm shrink-0 active:scale-95"
+          title="Ghim địa chỉ bến bãi nhanh"
         >
           <PlusCircle className="w-4 h-4" />
-          <span className="hidden xs:inline">Ghim kho</span>
+          <span className="hidden xs:inline">Ghim địa chỉ</span>
         </Link>
       </div>
 

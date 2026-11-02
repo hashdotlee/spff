@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Incident } from '@/types/database';
+import { createClient } from '@/lib/supabase/client';
 import { HeartHandshake, Clock, MessageSquare, X, Check, Phone } from 'lucide-react';
 import { formatDistance } from '@/lib/utils/distance';
 
@@ -20,8 +21,27 @@ export function OfferHelpModal({
 }: OfferHelpModalProps) {
   const [eta, setEta] = useState<number>(10);
   const [message, setMessage] = useState('');
+  const [helperPhone, setHelperPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      const supabase = createClient();
+      supabase.auth.getUser().then(async ({ data }: any) => {
+        if (data?.user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('phone')
+            .eq('id', data.user.id)
+            .maybeSingle();
+          if (profile?.phone) {
+            setHelperPhone(profile.phone);
+          }
+        }
+      });
+    }
+  }, [isOpen]);
 
   if (!isOpen || !incident) return null;
 
@@ -38,6 +58,19 @@ export function OfferHelpModal({
     setSubmitting(true);
     setErrorMsg(null);
     try {
+      if (helperPhone.trim()) {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          await supabase
+            .from('profiles')
+            .update({ phone: helperPhone.trim() })
+            .eq('id', user.id);
+        }
+      }
+
       await onSubmit(eta, message.trim());
       onClose();
     } catch (err: any) {
@@ -130,6 +163,26 @@ export function OfferHelpModal({
             </div>
           </div>
 
+          {/* Helper Phone Number */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Số điện thoại của bạn</span>
+              </span>
+              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                Để tài xế liên hệ lại khi bạn đến
+              </span>
+            </label>
+            <input
+              type="tel"
+              value={helperPhone}
+              onChange={(e) => setHelperPhone(e.target.value)}
+              placeholder="VD: 0987654321..."
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+
           {/* Helper Message / Tools available */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -180,7 +233,7 @@ export function OfferHelpModal({
               ) : (
                 <>
                   <Check className="w-4 h-4" />
-                  <span>Xác Nhận Hỗ Trợ Ngay</span>
+                  <span>Xác Nhận Đi Ứng Cứu</span>
                 </>
               )}
             </button>

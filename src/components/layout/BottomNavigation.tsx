@@ -36,13 +36,13 @@ export function BottomNavigation() {
     },
     {
       label: 'Cứu hộ SOS',
-      href: '/incidents',
+      href: '/incidents/new',
       icon: Siren,
       isActive: pathname.startsWith('/incidents'),
       isSos: true,
     },
     {
-      label: 'Ghim kho',
+      label: 'Ghim địa chỉ',
       href: '/warehouse/new',
       icon: PlusCircle,
       isActive: pathname === '/warehouse/new',

@@ -145,7 +145,7 @@ export function Navbar() {
         <div className="flex items-center gap-1.5 sm:gap-2.5">
           {/* Quick SOS Link */}
           <Link
-            href="/incidents"
+            href="/incidents/new"
             className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-full text-xs font-black transition flex items-center gap-1 active:scale-95 shrink-0"
             title="Cứu hộ SOS khẩn cấp"
           >

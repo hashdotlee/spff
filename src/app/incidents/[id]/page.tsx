@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, use } from 'react';
+import { Suspense, useEffect, useState, useRef, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -27,6 +27,8 @@ import {
   ShieldAlert,
   MessageSquare,
   Award,
+  Play,
+  Pause,
 } from 'lucide-react';
 
 function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
@@ -44,6 +46,8 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
   const [actionLoading, setActionLoading] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const supabase = createClient();
 
@@ -258,6 +262,20 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
   const isHelper = Boolean(incident.current_user_helper);
   const navUrl = getGoogleMapsNavigationUrl(incident.latitude, incident.longitude);
 
+  const audioUrl = incident.audio_url || (incident.description?.includes('[Voice]: ') ? incident.description.split('[Voice]: ')[1].trim() : null);
+  const cleanDescription = incident.description?.replace(/\[Voice\]:\s*.+$/, '').trim() || incident.description;
+
+  function toggleAudio() {
+    if (!audioRef.current) return;
+    if (isPlayingAudio) {
+      audioRef.current.pause();
+      setIsPlayingAudio(false);
+    } else {
+      audioRef.current.play();
+      setIsPlayingAudio(true);
+    }
+  }
+
   return (
     <div className="p-3 sm:p-6 max-w-2xl mx-auto w-full space-y-4">
       {/* Top Navigation Bar */}
@@ -336,9 +354,43 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
             {incident.title}
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 mt-2 leading-relaxed bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
-            {incident.description}
+            {cleanDescription}
           </p>
         </div>
+
+        {/* Voice Note Player if available */}
+        {audioUrl && (
+          <div className="p-3 bg-red-50/80 border border-red-200 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <button
+                type="button"
+                onClick={toggleAudio}
+                className="w-10 h-10 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-xs shrink-0 active:scale-95 transition cursor-pointer"
+                title={isPlayingAudio ? 'Tạm dừng' : 'Nghe lời nhắn thoại'}
+              >
+                {isPlayingAudio ? (
+                  <Pause className="w-5 h-5 fill-white" />
+                ) : (
+                  <Play className="w-5 h-5 fill-white ml-0.5" />
+                )}
+              </button>
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-red-950 block truncate">
+                  Lời nhắn thoại từ tài xế 🎙️
+                </span>
+                <span className="text-[10px] text-red-700 block">
+                  {isPlayingAudio ? 'Đang phát lời nhắn...' : 'Chạm để nghe chỉ dẫn hiện trường'}
+                </span>
+              </div>
+            </div>
+            <audio
+              ref={audioRef}
+              src={audioUrl}
+              onEnded={() => setIsPlayingAudio(false)}
+              className="hidden"
+            />
+          </div>
+        )}
 
         {/* Proof Photo (Ảnh chứng minh tại hiện trường) */}
         <div>
@@ -405,7 +457,7 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
             className="min-h-[46px] px-4 py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-2xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20"
           >
             <Phone className="w-4 h-4" />
-            <span>Gọi Cứu Hộ Ngay</span>
+            <span>Gọi Cứu Hộ ({incident.phone})</span>
           </a>
 
           <a

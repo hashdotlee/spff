@@ -113,6 +113,7 @@ export interface Incident {
   address: string | null;
   photo_url: string; // Bắt buộc ảnh hiện trường để chứng minh
   phone: string;
+  audio_url?: string | null;
   status: IncidentStatus;
   helper_count: number;
   created_at: string;
