@@ -38,12 +38,27 @@ export async function recalculateReputation(
       return;
     }
 
-    // Đếm kho active (+10đ mỗi kho)
-    const { count: whCount } = await supabase
-      .from('warehouses')
-      .select('id', { count: 'exact', head: true })
-      .eq('created_by', userId)
-      .eq('status', 'active');
+    // Đếm kho công khai active (+10đ mỗi kho công khai)
+    let whCount = 0;
+    try {
+      const { count, error } = await supabase
+        .from('warehouses')
+        .select('id', { count: 'exact', head: true })
+        .eq('created_by', userId)
+        .eq('status', 'active')
+        .neq('is_private', true);
+
+      if (error) throw error;
+      whCount = count || 0;
+    } catch {
+      // Fallback nếu cột is_private chưa có trong DB
+      const { count } = await supabase
+        .from('warehouses')
+        .select('id', { count: 'exact', head: true })
+        .eq('created_by', userId)
+        .eq('status', 'active');
+      whCount = count || 0;
+    }
 
     // Đếm voice active (+5đ mỗi voice)
     const { count: vnCount } = await supabase
@@ -121,7 +136,7 @@ export async function deleteWarehouse(
     // 1. Lấy thông tin kho và tác giả
     const { data: wh } = await supabase
       .from('warehouses')
-      .select('created_by, status')
+      .select('created_by, status, is_private')
       .eq('id', warehouseId)
       .maybeSingle();
 
@@ -157,8 +172,8 @@ export async function deleteWarehouse(
       }
     }
 
-    // 5. Trừ điểm tác giả ghim kho nếu kho đang active
-    if (wh?.created_by) {
+    // 5. Trừ điểm tác giả ghim kho nếu kho công khai đang active
+    if (wh?.created_by && !wh?.is_private) {
       await adjustUserReputation(supabase, wh.created_by, -10);
     }
 
@@ -256,7 +271,7 @@ export async function toggleWarehouseStatus(
   // 1. Lấy thông tin kho trước khi đổi
   const { data: wh } = await supabase
     .from('warehouses')
-    .select('created_by, status')
+    .select('created_by, status, is_private')
     .eq('id', warehouseId)
     .maybeSingle();
 
@@ -285,8 +300,8 @@ export async function toggleWarehouseStatus(
       .update({ status: 'hidden' })
       .eq('warehouse_id', warehouseId);
 
-    // Trừ điểm của người ghim kho nếu trước đó đang active
-    if (wh?.created_by && prevStatus === 'active') {
+    // Trừ điểm của người ghim kho nếu trước đó đang active và công khai
+    if (wh?.created_by && prevStatus === 'active' && !wh.is_private) {
       await adjustUserReputation(supabase, wh.created_by, -10);
     }
 
@@ -298,8 +313,47 @@ export async function toggleWarehouseStatus(
       }
     }
   } else if (newStatus === 'active' && prevStatus === 'hidden') {
-    // Hoàn lại điểm cho người ghim kho
-    if (wh?.created_by) {
+    // Hoàn lại điểm cho người ghim kho nếu là công khai
+    if (wh?.created_by && !wh?.is_private) {
+      await adjustUserReputation(supabase, wh.created_by, 10);
+    }
+  }
+}
+
+/**
+ * Chuyển đổi chế độ riêng tư của điểm ghim (is_private):
+ * - Nếu chuyển sang Riêng tư (is_private = true): Trừ 10 điểm cống hiến (nếu trước đó là công khai & active)
+ * - Nếu chuyển sang Công khai (is_private = false): Cộng 10 điểm cống hiến cho người ghim (nếu đang active)
+ */
+export async function toggleWarehousePrivacy(
+  supabase: SupabaseClient,
+  warehouseId: string,
+  newIsPrivate: boolean
+) {
+  // 1. Lấy thông tin kho hiện tại
+  const { data: wh } = await supabase
+    .from('warehouses')
+    .select('created_by, status, is_private')
+    .eq('id', warehouseId)
+    .maybeSingle();
+
+  const prevIsPrivate = !!wh?.is_private;
+
+  // 2. Cập nhật is_private
+  const { error } = await supabase
+    .from('warehouses')
+    .update({ is_private: newIsPrivate })
+    .eq('id', warehouseId);
+
+  if (error) throw error;
+
+  // 3. Cập nhật điểm cống hiến tương ứng nếu kho đang active
+  if (wh?.created_by && wh.status === 'active') {
+    if (newIsPrivate && !prevIsPrivate) {
+      // Công khai -> Riêng tư: trừ 10 điểm
+      await adjustUserReputation(supabase, wh.created_by, -10);
+    } else if (!newIsPrivate && prevIsPrivate) {
+      // Riêng tư -> Công khai: cộng 10 điểm
       await adjustUserReputation(supabase, wh.created_by, 10);
     }
   }

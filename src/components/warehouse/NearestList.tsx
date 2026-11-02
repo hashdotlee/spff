@@ -19,6 +19,7 @@ import {
   Building2,
   UtensilsCrossed,
   Home,
+  Lock,
 } from 'lucide-react';
 
 interface NearestListProps {
@@ -140,6 +141,14 @@ export function NearestList({
                         <span className="text-orange-700 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200 text-[11px] font-bold inline-flex items-center gap-1">
                           <Building2 className="w-3 h-3 text-orange-600" />
                           <span>Kho hàng</span>
+                        </span>
+                      )}
+
+                      {/* Riêng tư badge */}
+                      {wh.is_private && (
+                        <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200 text-[11px] font-bold inline-flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-purple-600" />
+                          <span>Riêng tư</span>
                         </span>
                       )}
 

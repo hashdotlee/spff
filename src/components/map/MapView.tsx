@@ -177,6 +177,10 @@ export default function MapView({
           ? `<span style="background-color: #eff6ff; color: #1d4ed8; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 6px; border: 1px solid #bfdbfe; display: inline-block; margin-bottom: 4px;">🏠 Nhà khách</span>`
           : `<span style="background-color: #fff7ed; color: #c2410c; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 6px; border: 1px solid #fed7aa; display: inline-block; margin-bottom: 4px;">🏢 Kho hàng</span>`;
 
+      const privacyBadge = wh.is_private
+        ? `<span style="background-color: #faf5ff; color: #7e22ce; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 6px; border: 1px solid #e9d5ff; display: inline-block; margin-bottom: 4px; margin-left: 4px;">🔒 Riêng tư</span>`
+        : '';
+
       const pinIcon = L.divIcon({
         className: 'custom-warehouse-pin-container',
         html: `
@@ -204,7 +208,7 @@ export default function MapView({
               ? `<img src="${wh.image_url}" alt="${wh.name}" class="w-full h-20 object-cover rounded-lg mb-1.5 border border-slate-200" />`
               : ''
           }
-          ${catBadge}
+          ${catBadge}${privacyBadge}
           <strong class="text-sm font-bold text-slate-900 block truncate">${wh.name}</strong>
           ${
             wh.distance_km !== undefined

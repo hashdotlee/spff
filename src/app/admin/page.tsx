@@ -9,6 +9,7 @@ import {
   deleteWarehouse,
   deleteVoiceNote,
   toggleWarehouseStatus,
+  toggleWarehousePrivacy,
   toggleVoiceNoteStatus,
   banUser,
   unbanUser,
@@ -39,6 +40,8 @@ import {
   Edit3,
   RotateCcw,
   Award,
+  Lock,
+  Globe,
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -228,6 +231,26 @@ export default function AdminPage() {
       checkAdminAndLoad();
     } catch {
       setMessage({ text: 'Lỗi cập nhật trạng thái kho.', type: 'error' });
+    }
+  }
+
+  // Bật/tắt chế độ Riêng tư kho hàng (Admin)
+  async function handleToggleWarehousePrivacyAction(warehouseId: string, warehouseName: string, currentIsPrivate: boolean) {
+    const nextIsPrivate = !currentIsPrivate;
+    const confirmMsg = nextIsPrivate
+      ? `Đặt kho "${warehouseName}" thành RIÊNG TƯ (chỉ người tạo mới xem được)?`
+      : `Đặt kho "${warehouseName}" thành CÔNG KHAI (mọi người đều xem được)?`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      await toggleWarehousePrivacy(supabase, warehouseId, nextIsPrivate);
+      setMessage({
+        text: nextIsPrivate ? 'Đã chuyển kho sang chế độ Riêng tư!' : 'Đã chuyển kho sang chế độ Công khai!',
+        type: 'success',
+      });
+      checkAdminAndLoad();
+    } catch {
+      setMessage({ text: 'Lỗi cập nhật quyền riêng tư kho.', type: 'error' });
     }
   }
 
@@ -766,6 +789,18 @@ export default function AdminPage() {
                       >
                         {wh.status === 'active' ? 'Hoạt động' : 'Đã ẩn'}
                       </span>
+
+                      {wh.is_private ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200 inline-flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-purple-600" />
+                          Riêng tư
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-200 inline-flex items-center gap-1">
+                          <Globe className="w-3 h-3 text-sky-600" />
+                          Công khai
+                        </span>
+                      )}
                     </div>
 
                     {wh.address && (
@@ -796,7 +831,16 @@ export default function AdminPage() {
                   </p>
                 )}
 
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 flex-wrap">
+                  <button
+                    onClick={() => handleToggleWarehousePrivacyAction(wh.id, wh.name, !!wh.is_private)}
+                    className="min-h-[34px] px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 active:scale-95 rounded-xl text-xs font-semibold transition flex items-center gap-1.5"
+                    title="Chuyển chế độ riêng tư / công khai"
+                  >
+                    {wh.is_private ? <Globe className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                    <span>{wh.is_private ? 'Chuyển Công khai' : 'Đặt Riêng tư'}</span>
+                  </button>
+
                   <button
                     onClick={() => handleToggleWarehouse(wh.id, wh.status)}
                     className="min-h-[34px] px-3 py-1 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 rounded-xl text-xs font-semibold transition flex items-center gap-1.5"

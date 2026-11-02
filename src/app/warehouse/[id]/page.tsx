@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { Warehouse, VoiceNote, UserRole } from '@/types/database';
 import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
-import { deleteWarehouse } from '@/lib/utils/adminActions';
+import { deleteWarehouse, toggleWarehousePrivacy } from '@/lib/utils/adminActions';
 import { AudioRecorder } from '@/components/voice/AudioRecorder';
 import { VoiceNoteCard } from '@/components/voice/VoiceNoteCard';
 import { VietQRModal } from '@/components/donation/VietQRModal';
@@ -27,6 +27,8 @@ import {
   Building2,
   UtensilsCrossed,
   Home,
+  Lock,
+  Globe,
 } from 'lucide-react';
 
 function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
@@ -37,6 +39,8 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
   const [isDeletingWh, setIsDeletingWh] = useState(false);
+  const [isTogglingPrivacy, setIsTogglingPrivacy] = useState(false);
+  const [isPrivateRestricted, setIsPrivateRestricted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showReportWarehouse, setShowReportWarehouse] = useState(false);
   const [showPinnerQRModal, setShowPinnerQRModal] = useState(false);
@@ -50,6 +54,7 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
       const {
         data: { user },
       } = await supabase.auth.getUser();
+      let userRole: UserRole | null = null;
       if (user) {
         setCurrentUserId(user.id);
         const { data: profile } = await supabase
@@ -57,7 +62,10 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
           .select('role')
           .eq('id', user.id)
           .single();
-        if (profile) setCurrentUserRole(profile.role);
+        if (profile) {
+          userRole = profile.role;
+          setCurrentUserRole(profile.role);
+        }
       }
 
       // Load warehouse
@@ -67,7 +75,15 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
         .eq('id', warehouseId)
         .single();
 
-      if (whData) setWarehouse(whData);
+      if (whData) {
+        // Kiểm tra quyền riêng tư: nếu kho private và viewer không phải người tạo / không phải admin
+        if (whData.is_private && whData.created_by !== user?.id && userRole !== 'admin') {
+          setIsPrivateRestricted(true);
+          setLoading(false);
+          return;
+        }
+        setWarehouse(whData);
+      }
 
       // Load voice notes with user profile and votes
       const { data: notesData } = await supabase
@@ -102,6 +118,31 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
       console.error('Error loading warehouse:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleTogglePrivacy() {
+    if (!warehouse) return;
+    const newPrivacy = !warehouse.is_private;
+    const confirmMsg = newPrivacy
+      ? 'Chuyển địa điểm này sang chế độ RIÊNG TƯ? (Chỉ mình bạn mới thấy điểm này trên bản đồ & hồ sơ cá nhân)'
+      : 'Chuyển địa điểm này sang chế độ CÔNG KHAI? (Mọi tài xế trong cộng đồng sẽ nhìn thấy & bạn nhận +10đ cống hiến ⭐)';
+    if (!confirm(confirmMsg)) return;
+
+    setIsTogglingPrivacy(true);
+    try {
+      await toggleWarehousePrivacy(supabase, warehouse.id, newPrivacy);
+      setWarehouse((prev) => (prev ? { ...prev, is_private: newPrivacy } : null));
+      alert(
+        newPrivacy
+          ? 'Đã chuyển sang chế độ Riêng tư (Chỉ mình bạn xem được).'
+          : 'Đã chuyển sang chế độ Công khai (+10đ cống hiến).'
+      );
+    } catch (err: any) {
+      console.error('Lỗi khi đổi quyền riêng tư:', err);
+      alert('Có lỗi xảy ra khi đổi quyền riêng tư. Vui lòng thử lại!');
+    } finally {
+      setIsTogglingPrivacy(false);
     }
   }
 
@@ -151,6 +192,33 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
     );
   }
 
+  if (isPrivateRestricted) {
+    return (
+      <div className="p-4 sm:p-6 max-w-md mx-auto w-full my-8 sm:my-16">
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center mx-auto shadow-inner">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-base sm:text-lg font-black text-slate-900">
+              Điểm Ghim Ở Chế Độ Riêng Tư
+            </h2>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Người tạo đã đặt địa chỉ này ở chế độ riêng tư (chỉ người tạo mới có thể xem). Bạn không có quyền truy cập vào điểm ghim này.
+            </p>
+          </div>
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition active:scale-95 shadow-xs"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Quay lại trang chủ</span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (!warehouse) {
     return (
       <div className="p-8 text-center text-slate-500">
@@ -195,15 +263,40 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
           </button>
 
           {(currentUserRole === 'admin' || currentUserId === warehouse.created_by) && (
-            <button
-              onClick={handleDeleteWarehouse}
-              disabled={isDeletingWh}
-              className="px-2.5 py-1.5 text-red-600 hover:bg-red-50 border border-red-200 rounded-xl transition active:scale-95 flex items-center gap-1 text-xs font-bold disabled:opacity-50"
-              title={currentUserRole === 'admin' ? 'Quản trị viên xóa kho này' : 'Xóa kho do bạn tạo'}
-            >
-              <Trash2 className="w-4 h-4" />
-              <span className="hidden xs:inline">Xóa kho</span>
-            </button>
+            <>
+              <button
+                onClick={handleTogglePrivacy}
+                disabled={isTogglingPrivacy}
+                className={`px-2.5 py-1.5 rounded-xl border transition active:scale-95 flex items-center gap-1 text-xs font-bold disabled:opacity-50 cursor-pointer ${
+                  warehouse.is_private
+                    ? 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+                title={warehouse.is_private ? 'Bấm để chuyển sang Công khai' : 'Bấm để chuyển sang Riêng tư'}
+              >
+                {warehouse.is_private ? (
+                  <>
+                    <Globe className="w-4 h-4 text-purple-600" />
+                    <span className="hidden xs:inline">Chuyển Công khai</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-4 h-4 text-slate-500" />
+                    <span className="hidden xs:inline">Đặt Riêng tư</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={handleDeleteWarehouse}
+                disabled={isDeletingWh}
+                className="px-2.5 py-1.5 text-red-600 hover:bg-red-50 border border-red-200 rounded-xl transition active:scale-95 flex items-center gap-1 text-xs font-bold disabled:opacity-50"
+                title={currentUserRole === 'admin' ? 'Quản trị viên xóa kho này' : 'Xóa kho do bạn tạo'}
+              >
+                <Trash2 className="w-4 h-4" />
+                <span className="hidden xs:inline">Xóa kho</span>
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -252,6 +345,19 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
                 <span className="text-orange-700 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200 text-xs font-bold inline-flex items-center gap-1">
                   <Building2 className="w-3.5 h-3.5 text-orange-600" />
                   <span>Kho hàng / Bến bãi</span>
+                </span>
+              )}
+
+              {/* Chế độ riêng tư / công khai */}
+              {warehouse.is_private ? (
+                <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200 text-xs font-bold inline-flex items-center gap-1">
+                  <Lock className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Riêng tư (Chỉ mình bạn)</span>
+                </span>
+              ) : (
+                <span className="text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200 text-xs font-bold inline-flex items-center gap-1">
+                  <Globe className="w-3.5 h-3.5 text-sky-600" />
+                  <span>Công khai</span>
                 </span>
               )}
             </div>

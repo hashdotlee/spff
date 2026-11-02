@@ -78,6 +78,20 @@ export default function HomePage() {
   // 2. Fetch Warehouses and Voice counts from Supabase
   async function loadWarehouses() {
     try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      let userRole: string | null = null;
+      if (user) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+        userRole = prof?.role || null;
+      }
+
       const { data, error } = await supabase
         .from('warehouses')
         .select(`
@@ -93,7 +107,15 @@ export default function HomePage() {
       }
 
       if (data) {
-        const parsed = data.map((wh: any) => ({
+        // Lọc hiển thị: chỉ hiện kho công khai HOẶC kho riêng tư do chính người dùng hiện tại tạo (hoặc admin)
+        const visibleData = data.filter((wh: any) => {
+          if (!wh.is_private) return true;
+          if (user && wh.created_by === user.id) return true;
+          if (userRole === 'admin') return true;
+          return false;
+        });
+
+        const parsed = visibleData.map((wh: any) => ({
           ...wh,
           voice_notes_count: wh.voice_notes?.[0]?.count || 0,
         }));

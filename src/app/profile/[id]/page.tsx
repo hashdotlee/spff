@@ -28,6 +28,8 @@ import {
   Building2,
   UtensilsCrossed,
   Home,
+  Lock,
+  Globe,
 } from 'lucide-react';
 
 function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
@@ -50,7 +52,18 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        if (user) setCurrentUserId(user.id);
+        let viewerRole: string | null = null;
+        if (user) {
+          setCurrentUserId(user.id);
+          const { data: viewerProf } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .maybeSingle();
+          viewerRole = viewerProf?.role || null;
+        }
+
+        const isOwnerOrAdmin = (user && user.id === profileId) || viewerRole === 'admin';
 
         const { data: profData } = await supabase
           .from('profiles')
@@ -97,7 +110,9 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
 
         let userWhList: Warehouse[] = [];
         if (whData) {
-          userWhList = whData.map((wh: any) => ({
+          // Chỉ người sở hữu hoặc admin mới xem được điểm ghim riêng tư
+          const visibleWhData = whData.filter((wh: any) => isOwnerOrAdmin || !wh.is_private);
+          userWhList = visibleWhData.map((wh: any) => ({
             ...wh,
             voice_notes_count: wh.voice_notes?.[0]?.count || 0,
           }));
@@ -412,6 +427,19 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
                             <span>Kho hàng</span>
                           </span>
                         )}
+
+                        {/* Privacy Badge */}
+                        {wh.is_private ? (
+                          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200 inline-flex items-center gap-0.5">
+                            <Lock className="w-2.5 h-2.5 text-purple-600" />
+                            <span>Riêng tư</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-sky-700 bg-sky-50 px-1.5 py-0.2 rounded border border-sky-200 inline-flex items-center gap-0.5">
+                            <Globe className="w-2.5 h-2.5 text-sky-600" />
+                            <span>Công khai</span>
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
                         <span>{wh.voice_notes_count || 0} voice chỉ dẫn</span>
@@ -422,9 +450,16 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
                   </div>
 
                   <div className="flex items-center justify-between xs:justify-end gap-2 shrink-0">
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
-                      +10đ
-                    </span>
+                    {wh.is_private ? (
+                      <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 px-2 py-1 rounded-lg border border-purple-200 inline-flex items-center gap-1">
+                        <Lock className="w-3 h-3 text-purple-600" />
+                        <span>Riêng tư</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
+                        +10đ
+                      </span>
+                    )}
 
                     <Link
                       href={`/warehouse/${wh.id}`}

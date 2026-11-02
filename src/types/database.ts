@@ -41,6 +41,7 @@ export interface Warehouse {
   created_by: string | null;
   status: WarehouseStatus;
   category?: PlaceCategory;
+  is_private?: boolean;
   created_at: string;
   // Computed / Joined fields
   distance_km?: number;

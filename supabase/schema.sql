@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS public.warehouses (
     created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'reported', 'hidden')),
     category TEXT NOT NULL DEFAULT 'warehouse' CHECK (category IN ('warehouse', 'eatery', 'customer')),
+    is_private BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
@@ -149,11 +150,12 @@ BEGIN
         RETURN;
     END IF;
 
-    -- A. Điểm từ ghim định vị kho bãi (+10 điểm mỗi điểm ghim)
+    -- A. Điểm từ ghim định vị kho bãi công khai (+10 điểm mỗi điểm ghim)
     SELECT COALESCE(COUNT(*) * 10, 0) INTO warehouse_pts
     FROM public.warehouses
     WHERE created_by = target_user_id
-      AND status = 'active';
+      AND status = 'active'
+      AND is_private = false;
 
     -- B. Điểm từ voice chỉ dẫn đóng góp (+5 điểm mỗi voice note)
     SELECT COALESCE(COUNT(*) * 5, 0) INTO voice_pts
@@ -340,10 +342,10 @@ CREATE POLICY "Users can update their own profile" ON public.profiles
     EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
   );
 
--- Warehouses: Ai cũng xem được kho 'active', admin xem được tất cả; user đăng nhập được thêm
+-- Warehouses: Ai cũng xem được kho công khai 'active', người tạo xem được kho riêng tư của mình, admin xem được tất cả; user đăng nhập được thêm
 CREATE POLICY "Active warehouses are viewable by everyone" ON public.warehouses
   FOR SELECT USING (
-    status = 'active' OR
+    (status = 'active' AND (is_private = false OR created_by = auth.uid())) OR
     created_by = auth.uid() OR
     EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
   );

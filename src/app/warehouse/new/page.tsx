@@ -21,6 +21,8 @@ import {
   Building2,
   UtensilsCrossed,
   Home,
+  Globe,
+  Lock,
 } from 'lucide-react';
 
 export default function NewWarehousePage() {
@@ -31,6 +33,7 @@ export default function NewWarehousePage() {
   const [audioDuration, setAudioDuration] = useState<number>(0);
   const [name, setName] = useState('');
   const [category, setCategory] = useState<PlaceCategory>('warehouse');
+  const [isPrivate, setIsPrivate] = useState<boolean>(false);
   const [lat, setLat] = useState(21.0285);
   const [lng, setLng] = useState(105.8542);
   const [gpsReady, setGpsReady] = useState(false);
@@ -148,7 +151,7 @@ export default function NewWarehousePage() {
         compress: true,
       });
 
-      // B. Insert vào bảng warehouses (kèm category, mặc định là 'warehouse')
+      // B. Insert vào bảng warehouses (kèm category & is_private)
       setStatusText('Đang ghim vị trí lên bản đồ...');
       const insertPayload: any = {
         name: finalName,
@@ -157,6 +160,7 @@ export default function NewWarehousePage() {
         image_url: uploadedImageUrl,
         created_by: user.id,
         category: category,
+        is_private: isPrivate,
         status: 'active',
       };
 
@@ -166,9 +170,10 @@ export default function NewWarehousePage() {
         .select()
         .single();
 
-      if (whError && (whError.code === '42703' || whError.message.includes('image_url') || whError.message.includes('category'))) {
+      if (whError && (whError.code === '42703' || whError.message.includes('image_url') || whError.message.includes('category') || whError.message.includes('is_private'))) {
         delete insertPayload.image_url;
         delete insertPayload.category;
+        delete insertPayload.is_private;
         const retryResult = await supabase
           .from('warehouses')
           .insert(insertPayload)
@@ -216,25 +221,27 @@ export default function NewWarehousePage() {
         }
       }
 
-      // D. Cập nhật điểm cống hiến (+10đ cho ghim định vị, +5đ nếu kèm voice)
-      try {
-        const bonusPoints = audioBlob ? 15 : 10;
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('reputation_score')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        if (prof) {
-          await supabase
+      // D. Cập nhật điểm cống hiến (+10đ cho ghim công khai, +5đ nếu kèm voice)
+      if (!isPrivate) {
+        try {
+          const bonusPoints = audioBlob ? 15 : 10;
+          const { data: prof } = await supabase
             .from('profiles')
-            .update({
-              reputation_score: (prof.reputation_score || 0) + bonusPoints,
-            })
-            .eq('id', user.id);
+            .select('reputation_score')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          if (prof) {
+            await supabase
+              .from('profiles')
+              .update({
+                reputation_score: (prof.reputation_score || 0) + bonusPoints,
+              })
+              .eq('id', user.id);
+          }
+        } catch (repErr) {
+          console.warn('Lỗi cập nhật điểm cống hiến:', repErr);
         }
-      } catch (repErr) {
-        console.warn('Lỗi cập nhật điểm cống hiến:', repErr);
       }
 
       // Hoàn tất -> chuyển thẳng đến trang chi tiết kho vừa tạo
@@ -451,6 +458,69 @@ export default function NewWarehousePage() {
             </div>
           </div>
 
+          {/* Quyền riêng tư địa điểm (Mặc định: Công khai) */}
+          <div className="pt-2 border-t border-slate-100">
+            <div className="mb-2 space-y-0.5">
+              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center justify-between">
+                <span>Quyền riêng tư ghim</span>
+                <span className="text-[10px] font-semibold text-slate-400 normal-case">
+                  {isPrivate ? 'Riêng tư' : 'Mặc định: Công khai'}
+                </span>
+              </label>
+              <span className="text-[10px] text-slate-500 font-medium block">
+                Bạn có thể giữ ghim này cho riêng mình hoặc chia sẻ cho cả cộng đồng tài xế.
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setIsPrivate(false)}
+                className={`p-3 rounded-2xl border text-left transition active:scale-[0.98] cursor-pointer flex flex-col justify-between ${
+                  !isPrivate
+                    ? 'border-orange-500 bg-orange-50/80 ring-2 ring-orange-500/20 shadow-xs'
+                    : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100 text-slate-600'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className={`text-xs font-bold flex items-center gap-1.5 ${!isPrivate ? 'text-orange-950' : 'text-slate-700'}`}>
+                    <Globe className={`w-4 h-4 ${!isPrivate ? 'text-orange-600' : 'text-slate-400'}`} />
+                    <span>Công khai</span>
+                  </span>
+                  <span className="w-3.5 h-3.5 rounded-full border border-orange-500 flex items-center justify-center bg-white shrink-0">
+                    {!isPrivate && <span className="w-2 h-2 rounded-full bg-orange-600" />}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 leading-tight">
+                  Ai cũng có thể xem & dẫn đường. <strong className="text-orange-700 font-bold">+10đ ⭐</strong> cống hiến.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsPrivate(true)}
+                className={`p-3 rounded-2xl border text-left transition active:scale-[0.98] cursor-pointer flex flex-col justify-between ${
+                  isPrivate
+                    ? 'border-purple-500 bg-purple-50/80 ring-2 ring-purple-500/20 shadow-xs'
+                    : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100 text-slate-600'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className={`text-xs font-bold flex items-center gap-1.5 ${isPrivate ? 'text-purple-950' : 'text-slate-700'}`}>
+                    <Lock className={`w-4 h-4 ${isPrivate ? 'text-purple-600' : 'text-slate-400'}`} />
+                    <span>Riêng tư</span>
+                  </span>
+                  <span className="w-3.5 h-3.5 rounded-full border border-purple-500 flex items-center justify-center bg-white shrink-0">
+                    {isPrivate && <span className="w-2 h-2 rounded-full bg-purple-600" />}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 leading-tight">
+                  Chỉ mình bạn thấy điểm này trên bản đồ & hồ sơ. Hoàn toàn bí mật.
+                </p>
+              </button>
+            </div>
+          </div>
+
           {/* Optional Text Input */}
           <div className="pt-1 border-t border-slate-100">
             <div className="mb-2 space-y-0.5">
@@ -481,17 +551,26 @@ export default function NewWarehousePage() {
             type="button"
             disabled={loading}
             onClick={() => handleSubmit()}
-            className="w-full min-h-[50px] py-3.5 px-4 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 active:scale-[0.99] text-white font-extrabold rounded-2xl shadow-lg shadow-orange-500/25 transition flex items-center justify-center gap-2 disabled:opacity-50 text-sm cursor-pointer mt-2"
+            className={`w-full min-h-[50px] py-3.5 px-4 active:scale-[0.99] text-white font-extrabold rounded-2xl shadow-lg transition flex items-center justify-center gap-2 disabled:opacity-50 text-sm cursor-pointer mt-2 ${
+              isPrivate
+                ? 'bg-gradient-to-r from-purple-700 to-indigo-600 hover:from-purple-800 hover:to-indigo-700 shadow-purple-500/25'
+                : 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 shadow-orange-500/25'
+            }`}
           >
             {loading ? (
               <div className="flex items-center gap-2">
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>{statusText || 'Đang đăng địa chỉ...'}</span>
+                <span>{statusText || 'Đang lưu địa chỉ...'}</span>
               </div>
+            ) : isPrivate ? (
+              <>
+                <Lock className="w-4 h-4" />
+                <span>Lưu Ghim Riêng Tư 🔒 (Chỉ Mình Tôi)</span>
+              </>
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                <span>Đăng Ghim Địa Chỉ (+10đ ⭐)</span>
+                <span>Đăng Ghim Công Khai (+10đ ⭐)</span>
               </>
             )}
           </button>
