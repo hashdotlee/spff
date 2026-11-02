@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { Warehouse } from '@/types/database';
 import { formatDistance } from '@/lib/utils/distance';
 import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
@@ -31,6 +32,7 @@ export function NearestList({
   selectedWarehouseId,
   onSelectWarehouse,
 }: NearestListProps) {
+  const router = useRouter();
   const [thankWh, setThankWh] = useState<Warehouse | null>(null);
   const [reportWh, setReportWh] = useState<Warehouse | null>(null);
 
@@ -71,11 +73,14 @@ export function NearestList({
           return (
             <div
               key={wh.id}
-              onClick={() => onSelectWarehouse?.(wh)}
-              className={`bg-white rounded-2xl p-3.5 sm:p-4 border transition-all duration-200 shadow-xs cursor-pointer ${
+              onClick={() => {
+                onSelectWarehouse?.(wh);
+                router.push(`/warehouse/${wh.id}`);
+              }}
+              className={`bg-white rounded-2xl p-3.5 sm:p-4 border transition-all duration-200 shadow-xs cursor-pointer hover:shadow-md hover:border-orange-400 group active:scale-[0.99] ${
                 isSelected
                   ? 'border-orange-500 ring-2 ring-orange-500/20 bg-orange-50/20'
-                  : 'border-slate-200 hover:border-orange-300'
+                  : 'border-slate-200'
               }`}
             >
               <div className="flex items-start justify-between gap-2.5">
@@ -95,7 +100,7 @@ export function NearestList({
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate">
+                      <h3 className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-orange-600 transition truncate">
                         {wh.name}
                       </h3>
 
@@ -202,7 +207,7 @@ export function NearestList({
                   className="min-h-[42px] py-2 px-2.5 bg-orange-600 hover:bg-orange-700 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs text-center"
                 >
                   <Volume2 className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">Chỉ dẫn voice</span>
+                  <span className="truncate">Chi tiết & Voice</span>
                   <ChevronRight className="w-3.5 h-3.5 opacity-80 shrink-0 hidden xs:inline" />
                 </Link>
               </div>
