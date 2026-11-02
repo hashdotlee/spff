@@ -144,14 +144,18 @@ export interface IncidentHelper {
 
 export interface LocationOrderRating {
   id: string;
-  warehouse_id: string;
+  warehouse_id?: string | null;
+  latitude: number;
+  longitude: number;
+  address?: string | null;
   user_id: string | null;
   rating: OrderRatingLevel;
   score: number; // 4: ngon, 3: tam, 2: khe, 1: mom
   hour_of_day: number; // 0..23
   note: string | null;
   created_at: string;
-  // Joined
+  // Joined / Computed
+  distance_km?: number;
   user?: Profile | null;
   warehouse?: Warehouse | null;
 }

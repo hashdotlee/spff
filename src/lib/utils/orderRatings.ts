@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { LocationOrderRating, OrderPredictionResult, OrderRatingLevel } from '@/types/database';
+import { calculateHaversineDistance } from '@/lib/utils/distance';
 
 /**
  * Điểm số tương ứng với các mức đánh giá khả năng nổ đơn:
@@ -71,11 +72,39 @@ export const ORDER_RATING_CONFIG: Record<
 };
 
 /**
+ * Lọc các đánh giá nổ đơn nằm trong bán kính (mặc định 2km) quanh một tọa độ GPS
+ */
+export function filterRatingsNearLocation(
+  ratings: LocationOrderRating[],
+  lat: number,
+  lon: number,
+  radiusKm: number = 2
+): LocationOrderRating[] {
+  if (!ratings || ratings.length === 0 || !lat || !lon) return [];
+
+  return ratings
+    .map((r) => {
+      const rLat = r.latitude ?? r.warehouse?.latitude;
+      const rLon = r.longitude ?? r.warehouse?.longitude;
+      if (typeof rLat !== 'number' || typeof rLon !== 'number') return null;
+
+      const dist = calculateHaversineDistance(lat, lon, rLat, rLon);
+      return {
+        ...r,
+        distance_km: dist,
+      };
+    })
+    .filter((r): r is LocationOrderRating & { distance_km: number } => r !== null && r.distance_km <= radiusKm)
+    .sort((a, b) => (a.distance_km || 0) - (b.distance_km || 0));
+}
+
+/**
  * Tính toán dự báo nổ đơn dựa trên điểm trung bình của các tài xế khác tại khung giờ đó
  */
 export function calculateOrderPrediction(
   ratings: LocationOrderRating[],
-  targetHour?: number
+  targetHour?: number,
+  contextText: string = 'khu vực này'
 ): OrderPredictionResult {
   const currentHour = targetHour !== undefined ? targetHour : new Date().getHours();
 
@@ -90,7 +119,7 @@ export function calculateOrderPrediction(
       badgeText: 'Chưa có dữ liệu',
       color: 'slate',
       bgClass: 'bg-slate-50 text-slate-600 border-slate-200',
-      description: `Chưa có bác tài nào báo tình hình nổ đơn tại khung giờ ${currentHour}h.`,
+      description: `Chưa có bác tài nào báo tình hình nổ đơn tại ${contextText} lúc ${currentHour}h.`,
       recentReportsCount: 0,
     };
   }
@@ -121,7 +150,7 @@ export function calculateOrderPrediction(
       badgeText: 'Chưa có báo đơn',
       color: 'slate',
       bgClass: 'bg-slate-50 text-slate-600 border-slate-200',
-      description: `Khung giờ ${currentHour}h chưa có báo cáo. Mời bác tài bấm báo đơn đầu tiên!`,
+      description: `Khung giờ ${currentHour}h chưa có báo cáo tại ${contextText}. Mời bác tài báo nổ đơn đầu tiên!`,
       recentReportsCount: 0,
     };
   }
@@ -141,7 +170,7 @@ export function calculateOrderPrediction(
       badgeText: 'Ngon 🔥',
       color: 'emerald',
       bgClass: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-      description: `Khung giờ ${currentHour}h thường có nhiều đơn, nổ liên tục (${roundedScore}/4⭐ từ ${ratingsToUse.length} lượt báo).`,
+      description: `Khung giờ ${currentHour}h tại ${contextText} thường có nhiều đơn, nổ liên tục (${roundedScore}/4⭐ từ ${ratingsToUse.length} lượt báo).`,
       recentReportsCount: recentRatings.length,
     };
   } else if (avgScore >= 2.3) {
@@ -155,7 +184,7 @@ export function calculateOrderPrediction(
       badgeText: 'Tạm 🛵',
       color: 'amber',
       bgClass: 'bg-amber-50 text-amber-800 border-amber-200',
-      description: `Khung giờ ${currentHour}h thường có đơn vừa phải, chờ vừa sức (${roundedScore}/4⭐ từ ${ratingsToUse.length} lượt báo).`,
+      description: `Khung giờ ${currentHour}h tại ${contextText} thường có đơn vừa phải, chờ vừa sức (${roundedScore}/4⭐ từ ${ratingsToUse.length} lượt báo).`,
       recentReportsCount: recentRatings.length,
     };
   } else if (avgScore >= 1.6) {
@@ -169,7 +198,7 @@ export function calculateOrderPrediction(
       badgeText: 'Khê ⏳',
       color: 'orange',
       bgClass: 'bg-orange-50 text-orange-800 border-orange-200',
-      description: `Khung giờ ${currentHour}h thường ít đơn hoặc phải chờ lâu (${roundedScore}/4⭐ từ ${ratingsToUse.length} lượt báo).`,
+      description: `Khung giờ ${currentHour}h tại ${contextText} thường ít đơn hoặc phải chờ lâu (${roundedScore}/4⭐ từ ${ratingsToUse.length} lượt báo).`,
       recentReportsCount: recentRatings.length,
     };
   } else {
@@ -183,7 +212,7 @@ export function calculateOrderPrediction(
       badgeText: 'Móm 🦗',
       color: 'rose',
       bgClass: 'bg-rose-50 text-rose-800 border-rose-200',
-      description: `Khung giờ ${currentHour}h thường đói đơn / móm (${roundedScore}/4⭐ từ ${ratingsToUse.length} lượt báo).`,
+      description: `Khung giờ ${currentHour}h tại ${contextText} thường đói đơn / móm (${roundedScore}/4⭐ từ ${ratingsToUse.length} lượt báo).`,
       recentReportsCount: recentRatings.length,
     };
   }
@@ -225,7 +254,7 @@ export function getHourlyBreakdown(ratings: LocationOrderRating[]) {
 }
 
 /**
- * Tải danh sách đánh giá từ Supabase (có bảo vệ fallback nếu bảng chưa tạo)
+ * Tải danh sách đánh giá từ Supabase
  */
 export async function fetchOrderRatings(
   supabase: SupabaseClient,
@@ -234,14 +263,13 @@ export async function fetchOrderRatings(
   try {
     let query = supabase
       .from('location_order_ratings')
-      .select('*, user:profiles(id, full_name, avatar_url)')
+      .select('*, user:profiles(id, full_name, avatar_url), warehouse:warehouses(id, name, address, category, latitude, longitude)')
       .order('created_at', { ascending: false });
 
     if (warehouseId) {
       query = query.eq('warehouse_id', warehouseId);
     } else {
-      // Nếu không truyền warehouseId, lấy 200 lượt đánh giá mới nhất
-      query = query.limit(200);
+      query = query.limit(300);
     }
 
     const { data, error } = await query;
@@ -257,12 +285,15 @@ export async function fetchOrderRatings(
 }
 
 /**
- * Gửi đánh giá tình hình nổ đơn mới
+ * Gửi đánh giá tình hình nổ đơn mới (tại vị trí GPS hiện tại hoặc theo kho cụ thể)
  */
 export async function submitOrderRating(
   supabase: SupabaseClient,
   params: {
-    warehouseId: string;
+    latitude: number;
+    longitude: number;
+    address?: string | null;
+    warehouseId?: string | null;
     rating: OrderRatingLevel;
     note?: string | null;
   }
@@ -276,12 +307,19 @@ export async function submitOrderRating(
       return { success: false, error: 'Vui lòng đăng nhập để đánh giá tình hình nổ đơn.' };
     }
 
+    if (!params.latitude || !params.longitude) {
+      return { success: false, error: 'Thiếu thông tin tọa độ GPS để lưu đánh giá.' };
+    }
+
     const score = ORDER_RATING_SCORES[params.rating];
     const hourOfDay = new Date().getHours();
 
-    const insertPayload = {
-      warehouse_id: params.warehouseId,
+    const insertPayload: any = {
       user_id: user.id,
+      latitude: params.latitude,
+      longitude: params.longitude,
+      address: params.address?.trim() || null,
+      warehouse_id: params.warehouseId || null,
       rating: params.rating,
       score: score,
       hour_of_day: hourOfDay,
@@ -291,14 +329,14 @@ export async function submitOrderRating(
     const { data, error } = await supabase
       .from('location_order_ratings')
       .insert(insertPayload)
-      .select('*, user:profiles(id, full_name, avatar_url)')
+      .select('*, user:profiles(id, full_name, avatar_url), warehouse:warehouses(id, name, address, category, latitude, longitude)')
       .single();
 
     if (error) {
       throw error;
     }
 
-    // Cộng điểm cống hiến cho tài xế (+2 điểm) khi báo cáo tình hình thực tế
+    // Tự động cập nhật điểm cống hiến cho tài xế (+2 điểm) khi báo cáo tình hình thực tế
     try {
       const { data: prof } = await supabase
         .from('profiles')

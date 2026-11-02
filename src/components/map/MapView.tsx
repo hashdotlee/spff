@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import type { Warehouse, Incident } from '@/types/database';
+import type { Warehouse, Incident, LocationOrderRating, OrderPredictionResult } from '@/types/database';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
@@ -10,11 +10,14 @@ interface MapViewProps {
   userLocation: { lat: number; lng: number } | null;
   warehouses: Warehouse[];
   incidents?: Incident[];
+  orderRatings?: LocationOrderRating[];
+  currentLocationPrediction?: OrderPredictionResult;
   selectedWarehouseId?: string | null;
   selectedIncidentId?: string | null;
   onSelectWarehouse?: (warehouse: Warehouse) => void;
   onSelectIncident?: (incident: Incident) => void;
   onRateOrder?: (warehouse: Warehouse) => void;
+  onRateCurrentLocation?: () => void;
   className?: string;
 }
 
@@ -22,11 +25,14 @@ export default function MapView({
   userLocation,
   warehouses,
   incidents = [],
+  orderRatings = [],
+  currentLocationPrediction,
   selectedWarehouseId,
   selectedIncidentId,
   onSelectWarehouse,
   onSelectIncident,
   onRateOrder,
+  onRateCurrentLocation,
   className = 'h-80 w-full rounded-2xl overflow-hidden shadow-inner',
 }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -102,19 +108,26 @@ export default function MapView({
     };
   }, []);
 
-  // Handler for rate order clicks inside Leaflet popup HTML
+  // Global Handlers for rate order clicks inside Leaflet popup HTML
   useEffect(() => {
-    (window as any).__spff_rate_order = (whId: string) => {
+    (window as any).__spff_rate_warehouse_order = (whId: string) => {
       const target = warehouses.find((w) => w.id === whId);
       if (target && onRateOrder) {
         onRateOrder(target);
       }
     };
 
-    return () => {
-      delete (window as any).__spff_rate_order;
+    (window as any).__spff_rate_current_location = () => {
+      if (onRateCurrentLocation) {
+        onRateCurrentLocation();
+      }
     };
-  }, [warehouses, onRateOrder]);
+
+    return () => {
+      delete (window as any).__spff_rate_warehouse_order;
+      delete (window as any).__spff_rate_current_location;
+    };
+  }, [warehouses, onRateOrder, onRateCurrentLocation]);
 
   // Update center when userLocation is first received or updated
   useEffect(() => {
@@ -139,7 +152,7 @@ export default function MapView({
 
     markersLayer.clearLayers();
 
-    // 1. User Location Pulse Marker
+    // 1. User Location Pulse Marker (Vị trí hiện tại của tài xế)
     if (
       userLocation &&
       typeof userLocation.lat === 'number' &&
@@ -154,18 +167,104 @@ export default function MapView({
             <div class="user-location-pulse"></div>
           </div>
         `,
-        iconSize: [20, 20],
-        iconAnchor: [10, 10],
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
       });
+
+      const curHour = new Date().getHours();
+      const pred = currentLocationPrediction;
+      const predHtml =
+        pred && pred.hasData
+          ? `<div style="margin: 4px 0; padding: 4px 6px; background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 11px; display: flex; align-items: center; justify-content: space-between;">
+               <span>⚡ <strong>Giờ ${curHour}h:</strong> ${pred.badgeText}</span>
+               <span style="font-weight: bold; color: #1d4ed8;">${pred.avgScore}/4⭐</span>
+             </div>`
+          : `<div style="margin: 4px 0; font-size: 10px; color: #64748b;">⚡ Giờ ${curHour}h: Chưa có báo đơn quanh đây</div>`;
 
       L.marker([userLocation.lat, userLocation.lng], { icon: userIcon })
         .addTo(markersLayer)
-        .bindPopup(
-          `<div class="text-xs font-semibold text-slate-800 p-1">Vị trí của bạn</div>`
-        );
+        .bindPopup(`
+          <div class="p-1 max-w-[200px]">
+            <strong class="text-xs font-black text-slate-900 block">📍 Vị trí hiện tại của bạn</strong>
+            ${predHtml}
+            <button onclick="window.__spff_rate_current_location && window.__spff_rate_current_location()"
+               style="cursor: pointer; width: 100%; margin-top: 5px; padding: 5px 8px; background: linear-gradient(to right, #2563eb, #1d4ed8); color: white; border-radius: 8px; font-size: 10px; font-weight: bold; border: none; display: flex; align-items: center; justify-content: center; gap: 4px;">
+               ⚡ Báo nổ đơn tại đây (+2đ ⭐)
+            </button>
+          </div>
+        `);
     }
 
-    // 2. Warehouse Markers (numbered 1..5 for the nearest or default pin)
+    // 2. Recent Order Rating Heat Markers (Các điểm tài xế vừa báo nổ đơn gần đây)
+    if (orderRatings && orderRatings.length > 0) {
+      const now = Date.now();
+      // Hiển thị các báo cáo trong vòng 18 tiếng qua
+      const recentRatings = orderRatings
+        .filter((r) => {
+          const diffHours = (now - new Date(r.created_at).getTime()) / (1000 * 60 * 60);
+          return diffHours <= 18;
+        })
+        .slice(0, 35);
+
+      recentRatings.forEach((r) => {
+        const rLat = r.latitude ?? r.warehouse?.latitude;
+        const rLon = r.longitude ?? r.warehouse?.longitude;
+        if (typeof rLat !== 'number' || typeof rLon !== 'number' || isNaN(rLat) || isNaN(rLon)) return;
+
+        const isNgon = r.rating === 'ngon';
+        const isTam = r.rating === 'tam';
+        const isKhe = r.rating === 'khe';
+
+        const color = isNgon ? '#10b981' : isTam ? '#f59e0b' : isKhe ? '#f97316' : '#f43f5e';
+        const label = isNgon ? 'Ngon 🔥' : isTam ? 'Tạm 🛵' : isKhe ? 'Khê ⏳' : 'Móm 🦗';
+        const iconChar = isNgon ? '⚡' : isTam ? '🛵' : isKhe ? '⏳' : '🦗';
+
+        const ratingIcon = L.divIcon({
+          className: 'custom-order-rating-pin',
+          html: `
+            <div style="background-color: ${color}; width: 22px; height: 22px; border-radius: 9999px; display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: bold; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 1.5px solid white; cursor: pointer;">
+              ${iconChar}
+            </div>
+          `,
+          iconSize: [22, 22],
+          iconAnchor: [11, 11],
+        });
+
+        const timeStr = new Date(r.created_at).toLocaleTimeString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+
+        const ratingMarker = L.marker([rLat, rLon], { icon: ratingIcon }).addTo(markersLayer);
+        ratingMarker.bindPopup(`
+          <div class="p-1 max-w-[190px]">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 2px;">
+              <span style="background-color: ${color}20; color: ${color}; font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 6px;">
+                ${label}
+              </span>
+              <span style="font-size: 10px; color: #64748b;">${timeStr} (${r.hour_of_day}h)</span>
+            </div>
+            <strong style="font-size: 11px; color: #0f172a; display: block; margin-top: 2px;">
+              ${r.user?.full_name ? `Bác tài: ${r.user.full_name}` : 'Bác tài ẩn danh'}
+            </strong>
+            ${
+              r.address || r.warehouse?.name
+                ? `<span style="font-size: 10px; color: #64748b; display: block; margin-top: 2px;">📍 ${
+                    r.warehouse?.name || r.address
+                  }</span>`
+                : ''
+            }
+            ${
+              r.note
+                ? `<p style="font-size: 10px; color: #334155; margin-top: 4px; font-style: italic; background: #f8fafc; padding: 3px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">"${r.note}"</p>`
+                : ''
+            }
+          </div>
+        `);
+      });
+    }
+
+    // 3. Warehouse Markers (numbered 1..5 for the nearest or default pin)
     warehouses.forEach((wh, index) => {
       if (
         typeof wh.latitude !== 'number' ||
@@ -201,13 +300,23 @@ export default function MapView({
         : '';
 
       const pred = wh.order_prediction;
+      const canRateOrders = cat === 'warehouse' || cat === 'eatery';
       const curHour = new Date().getHours();
-      const orderBadge = pred && pred.hasData
-        ? `<div style="margin: 4px 0; padding: 3px 6px; background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; font-size: 10px; display: flex; align-items: center; justify-content: space-between;">
-             <span>⚡ <strong>Lúc ${curHour}h:</strong> ${pred.badgeText}</span>
-             <span style="font-weight: bold; color: #c2410c;">${pred.avgScore}/4⭐</span>
-           </div>`
-        : `<div style="margin: 4px 0; font-size: 10px; color: #64748b;">⚡ Lúc ${curHour}h: Chưa có báo đơn</div>`;
+      const orderBadge = canRateOrders
+        ? pred && pred.hasData
+          ? `<div style="margin: 4px 0; padding: 3px 6px; background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; font-size: 10px; display: flex; align-items: center; justify-content: space-between;">
+               <span>⚡ <strong>${cat === 'eatery' ? 'Quán' : 'Kho'} lúc ${curHour}h:</strong> ${pred.badgeText}</span>
+               <span style="font-weight: bold; color: #c2410c;">${pred.avgScore}/4⭐</span>
+             </div>`
+          : `<div style="margin: 4px 0; font-size: 10px; color: #64748b;">⚡ Lúc ${curHour}h: Chưa có báo đơn</div>`
+        : '';
+
+      const rateOrderBtn = canRateOrders
+        ? `<button onclick="window.__spff_rate_warehouse_order && window.__spff_rate_warehouse_order('${wh.id}')"
+             style="cursor: pointer; width: 100%; margin-top: 5px; padding: 5px 8px; background: linear-gradient(to right, #ea580c, #d97706); color: white; border-radius: 8px; font-size: 10px; font-weight: bold; border: none; display: flex; align-items: center; justify-content: center; gap: 4px;">
+             ⚡ Báo nổ đơn tại ${cat === 'eatery' ? 'quán này' : 'kho này'} (+2đ ⭐)
+          </button>`
+        : '';
 
       const pinIcon = L.divIcon({
         className: 'custom-warehouse-pin-container',
@@ -254,10 +363,7 @@ export default function MapView({
               : ''
           }
           ${orderBadge}
-          <button onclick="window.__spff_rate_order && window.__spff_rate_order('${wh.id}')"
-             style="cursor: pointer; width: 100%; margin-top: 5px; padding: 5px 8px; background: linear-gradient(to right, #ea580c, #d97706); color: white; border-radius: 8px; font-size: 10px; font-weight: bold; border: none; display: flex; align-items: center; justify-content: center; gap: 4px;">
-             ⚡ Báo tình hình nổ đơn (+2đ ⭐)
-          </button>
+          ${rateOrderBtn}
           <div class="mt-2 flex items-center gap-1.5">
             <a href="${navUrl}" target="_blank" rel="noopener noreferrer" 
                class="px-2.5 py-1.5 bg-blue-600 text-white rounded-lg text-[11px] font-bold inline-flex items-center justify-center hover:bg-blue-700 active:scale-95 transition">
@@ -278,7 +384,7 @@ export default function MapView({
       });
     });
 
-    // 3. SOS Incident Markers (Flashing Red Pin 🚨)
+    // 4. SOS Incident Markers (Flashing Red Pin 🚨)
     incidents.forEach((inc) => {
       if (
         typeof inc.latitude !== 'number' ||
@@ -353,7 +459,18 @@ export default function MapView({
         }
       });
     });
-  }, [userLocation, warehouses, incidents, selectedWarehouseId, selectedIncidentId, onSelectWarehouse, onSelectIncident]);
+  }, [
+    userLocation,
+    warehouses,
+    incidents,
+    orderRatings,
+    currentLocationPrediction,
+    selectedWarehouseId,
+    selectedIncidentId,
+    onSelectWarehouse,
+    onSelectIncident,
+    onRateCurrentLocation,
+  ]);
 
   return (
     <div

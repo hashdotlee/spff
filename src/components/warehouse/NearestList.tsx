@@ -74,6 +74,7 @@ export function NearestList({
           const isSelected = selectedWarehouseId === wh.id;
           const navUrl = getGoogleMapsNavigationUrl(wh.latitude, wh.longitude);
           const cat = wh.category || 'warehouse';
+          const canRateOrders = cat === 'warehouse' || cat === 'eatery';
 
           return (
             <div
@@ -181,8 +182,8 @@ export function NearestList({
                         <span>{wh.voice_notes_count || 0} voice chỉ đường</span>
                       </span>
 
-                      {/* Tình hình nổ đơn badge & button */}
-                      {wh.order_prediction && (
+                      {/* Tình hình nổ đơn badge & button (Chỉ hiển thị với kho hàng hoặc quán ăn) */}
+                      {canRateOrders && wh.order_prediction && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -199,7 +200,7 @@ export function NearestList({
                           <Zap className="w-3 h-3 text-orange-500 fill-current shrink-0" />
                           <span>
                             {wh.order_prediction.hasData
-                              ? `${new Date().getHours()}h: ${wh.order_prediction.badgeText} (${wh.order_prediction.avgScore}/4⭐)`
+                              ? `${wh.order_prediction.currentHour}h: ${wh.order_prediction.badgeText} (${wh.order_prediction.avgScore}/4⭐)`
                               : 'Báo đơn (+2đ)'}
                           </span>
                         </button>

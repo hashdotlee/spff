@@ -623,10 +623,13 @@ UPDATE public.profiles
 SET role = 'admin'
 WHERE email = 'hashdotlee@gmail.com';
 
--- 13. Bảng Location Order Ratings (Đánh giá tình hình nổ đơn theo giờ thực tế)
+-- 13. Bảng Location Order Ratings (Đánh giá tình hình nổ đơn theo vị trí GPS & giờ thực tế)
 CREATE TABLE IF NOT EXISTS public.location_order_ratings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    warehouse_id UUID NOT NULL REFERENCES public.warehouses(id) ON DELETE CASCADE,
+    warehouse_id UUID REFERENCES public.warehouses(id) ON DELETE CASCADE,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    address TEXT,
     user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     rating TEXT NOT NULL CHECK (rating IN ('ngon', 'tam', 'khe', 'mom')),
     score INT NOT NULL CHECK (score BETWEEN 1 AND 4),
@@ -635,11 +638,14 @@ CREATE TABLE IF NOT EXISTS public.location_order_ratings (
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
-CREATE INDEX IF NOT EXISTS idx_order_ratings_wh_hour 
-ON public.location_order_ratings (warehouse_id, hour_of_day);
+CREATE INDEX IF NOT EXISTS idx_order_ratings_coords 
+ON public.location_order_ratings (latitude, longitude);
+
+CREATE INDEX IF NOT EXISTS idx_order_ratings_hour 
+ON public.location_order_ratings (hour_of_day);
 
 CREATE INDEX IF NOT EXISTS idx_order_ratings_created 
-ON public.location_order_ratings (warehouse_id, created_at DESC);
+ON public.location_order_ratings (created_at DESC);
 
 ALTER TABLE public.location_order_ratings ENABLE ROW LEVEL SECURITY;
 

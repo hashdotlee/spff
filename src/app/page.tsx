@@ -8,7 +8,7 @@ import type { Warehouse, Incident, PlaceCategory, LocationOrderRating } from '@/
 import { calculateHaversineDistance, formatDistance } from '@/lib/utils/distance';
 import { NearestList } from '@/components/warehouse/NearestList';
 import { RateLocationOrderModal } from '@/components/warehouse/RateLocationOrderModal';
-import { fetchOrderRatings, calculateOrderPrediction } from '@/lib/utils/orderRatings';
+import { fetchOrderRatings, calculateOrderPrediction, filterRatingsNearLocation } from '@/lib/utils/orderRatings';
 import {
   MapPin,
   PlusCircle,
@@ -44,7 +44,12 @@ export default function HomePage() {
   const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [orderRatings, setOrderRatings] = useState<LocationOrderRating[]>([]);
-  const [ratingWarehouse, setRatingWarehouse] = useState<Warehouse | null>(null);
+  const [ratingModalContext, setRatingModalContext] = useState<
+    | { mode: 'current_location' }
+    | { mode: 'warehouse'; warehouse: Warehouse }
+    | null
+  >(null);
+  const [currentHour, setCurrentHour] = useState(12);
   const [loading, setLoading] = useState(true);
   const [locating, setLocating] = useState(false);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -163,6 +168,7 @@ export default function HomePage() {
   }
 
   useEffect(() => {
+    setCurrentHour(new Date().getHours());
     requestLocation();
     loadWarehouses();
     loadIncidents();
@@ -184,6 +190,16 @@ export default function HomePage() {
   });
 
   const nearbyIncidents = computedIncidents.filter((inc) => (inc.distance_km || 0) <= 25);
+
+  // Dự báo khả năng nổ đơn tại vị trí GPS hiện tại của tài xế (dựa trên các đánh giá trong bán kính 2km)
+  const currentLocationPrediction = userLocation
+    ? calculateOrderPrediction(
+        filterRatingsNearLocation(orderRatings, userLocation.lat, userLocation.lng, 2),
+        currentHour,
+        'quanh vị trí bạn'
+      )
+    : undefined;
+
   const sortedWarehouses = warehouses
     .map((wh) => {
       let distance_km = 0;
@@ -195,8 +211,25 @@ export default function HomePage() {
           wh.longitude
         );
       }
-      const whRatings = orderRatings.filter((r) => r.warehouse_id === wh.id);
-      const order_prediction = calculateOrderPrediction(whRatings);
+      // Chỉ đánh giá nổ đơn cho kho hàng ('warehouse') hoặc quán ăn ('eatery')
+      const whCat = wh.category || 'warehouse';
+      const canRateOrders = whCat === 'warehouse' || whCat === 'eatery';
+
+      let order_prediction = undefined;
+      if (canRateOrders) {
+        const whRatings = orderRatings.filter(
+          (r) =>
+            r.warehouse_id === wh.id ||
+            (typeof r.latitude === 'number' &&
+              typeof r.longitude === 'number' &&
+              calculateHaversineDistance(wh.latitude, wh.longitude, r.latitude, r.longitude) <= 0.5)
+        );
+        order_prediction = calculateOrderPrediction(
+          whRatings,
+          currentHour,
+          whCat === 'eatery' ? `quán ${wh.name}` : `kho ${wh.name}`
+        );
+      }
       return { ...wh, distance_km, order_prediction };
     })
     .sort((a, b) => (a.distance_km || 0) - (b.distance_km || 0))
@@ -390,43 +423,44 @@ export default function HomePage() {
           userLocation={userLocation}
           warehouses={sortedWarehouses}
           incidents={computedIncidents}
+          orderRatings={orderRatings}
+          currentLocationPrediction={currentLocationPrediction}
           selectedWarehouseId={selectedWarehouse?.id}
           selectedIncidentId={selectedIncident?.id}
           onSelectWarehouse={(wh) => setSelectedWarehouse(wh)}
           onSelectIncident={(inc) => setSelectedIncident(inc)}
-          onRateOrder={(wh) => setRatingWarehouse(wh)}
+          onRateOrder={(wh) => setRatingModalContext({ mode: 'warehouse', warehouse: wh })}
+          onRateCurrentLocation={() => setRatingModalContext({ mode: 'current_location' })}
           className="h-64 sm:h-80 w-full rounded-2xl overflow-hidden shadow-xs border border-slate-200"
         />
 
-        {/* Nút đánh giá điểm hiện tại / điểm đã chọn trên bản đồ */}
+        {/* Nút báo nổ đơn tại vị trí định vị GPS hiện tại của tài xế */}
         <button
           onClick={() => {
-            const targetWh = selectedWarehouse || sortedWarehouses[0];
-            if (targetWh) {
-              setRatingWarehouse(targetWh);
-            } else {
-              alert('Chưa có địa điểm nào gần bạn để đánh giá. Bạn có thể bấm "Ghim địa chỉ" để thêm điểm mới!');
+            if (!userLocation) {
+              requestLocation();
+              alert('Đang kích hoạt định vị GPS của bạn. Vui lòng cho phép quyền truy cập vị trí và thử lại!');
+              return;
             }
+            setRatingModalContext({ mode: 'current_location' });
           }}
-          className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-xs hover:bg-white text-slate-800 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl shadow-md border border-slate-200 hover:border-orange-400 transition active:scale-95 flex items-center gap-2 cursor-pointer text-xs font-bold group"
-          title="Báo tình hình nổ đơn tại điểm hiện tại"
+          className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-xs hover:bg-white text-slate-800 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl shadow-md border border-slate-200 hover:border-blue-400 transition active:scale-95 flex items-center gap-2 cursor-pointer text-xs font-bold group"
+          title="Báo tình hình nổ đơn tại vị trí định vị hiện tại của bạn"
         >
-          <div className="w-6 h-6 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 group-hover:bg-orange-600 group-hover:text-white transition">
+          <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition">
             <Zap className="w-3.5 h-3.5 fill-current" />
           </div>
           <div className="text-left">
             <div className="flex items-center gap-1">
               <span className="text-xs font-black text-slate-900">Báo nổ đơn</span>
-              <span className="text-[10px] text-orange-600 font-extrabold px-1 py-0.2 rounded bg-orange-50 border border-orange-200">
+              <span className="text-[10px] text-blue-600 font-extrabold px-1 py-0.2 rounded bg-blue-50 border border-blue-200">
                 +2đ ⭐
               </span>
             </div>
-            <span className="text-[10px] text-slate-500 font-medium block truncate max-w-[130px] xs:max-w-[180px]">
-              {selectedWarehouse
-                ? `Tại: ${selectedWarehouse.name}`
-                : sortedWarehouses[0]?.name
-                ? `Tại: ${sortedWarehouses[0].name}`
-                : 'Điểm hiện tại'}
+            <span className="text-[10px] text-slate-500 font-medium block truncate max-w-[140px] xs:max-w-[190px]">
+              {currentLocationPrediction?.hasData
+                ? `Vị trí bạn: ${currentLocationPrediction.badgeText}`
+                : 'Tại vị trí GPS của bạn'}
             </span>
           </div>
         </button>
@@ -452,16 +486,17 @@ export default function HomePage() {
           warehouses={sortedWarehouses}
           selectedWarehouseId={selectedWarehouse?.id}
           onSelectWarehouse={(wh) => setSelectedWarehouse(wh)}
-          onRateOrder={(wh) => setRatingWarehouse(wh)}
+          onRateOrder={(wh) => setRatingModalContext({ mode: 'warehouse', warehouse: wh })}
         />
       )}
 
-      {/* Modal Báo tình hình nổ đơn */}
-      {ratingWarehouse && (
+      {/* Modal Báo tình hình nổ đơn (Hỗ trợ cả vị trí GPS hiện tại & theo kho cụ thể) */}
+      {ratingModalContext && (
         <RateLocationOrderModal
-          warehouse={ratingWarehouse}
-          existingRatings={orderRatings.filter((r) => r.warehouse_id === ratingWarehouse.id)}
-          onClose={() => setRatingWarehouse(null)}
+          warehouse={ratingModalContext.mode === 'warehouse' ? ratingModalContext.warehouse : null}
+          currentLocation={ratingModalContext.mode === 'current_location' ? userLocation : null}
+          existingRatings={orderRatings}
+          onClose={() => setRatingModalContext(null)}
           onRatingSubmitted={(newRating) => {
             setOrderRatings((prev) => [newRating, ...prev]);
           }}
