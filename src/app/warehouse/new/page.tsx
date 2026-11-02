@@ -361,9 +361,14 @@ export default function NewWarehousePage() {
 
           {/* Optional Text Input */}
           <div className="pt-1 border-t border-slate-100">
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Tên địa chỉ / Ghi chú bằng chữ (Tùy chọn)
-            </label>
+            <div className="mb-2 space-y-0.5">
+              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                Tên địa chỉ / Ghi chú bằng chữ
+              </label>
+              <span className="text-[10px] text-slate-400 font-medium block">
+                (Tùy chọn)
+              </span>
+            </div>
             <input
               type="text"
               value={name}

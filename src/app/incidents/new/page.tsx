@@ -330,15 +330,17 @@ export default function NewIncidentPage() {
       {/* 1. SỐ ĐIỆN THOẠI GỌI CỨU HỘ (ĐỂ NGƯỜI ĐẾN CÒN GỌI)       */}
       {/* ======================================================== */}
       <div className="bg-white p-4 sm:p-5 rounded-3xl border-2 border-emerald-300 shadow-sm">
-        <div className="flex items-center justify-between mb-2">
+        <div className="mb-2.5 space-y-1">
           <label className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-            <Phone className="w-4 h-4 text-emerald-600" />
+            <Phone className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>Số điện thoại gọi cứu hộ *</span>
           </label>
-          <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1">
-            <span>Để người đến còn gọi</span>
-            <span>📞</span>
-          </span>
+          <div>
+            <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-300 inline-flex items-center gap-1">
+              <span>Để người đến còn gọi</span>
+              <span>📞</span>
+            </span>
+          </div>
         </div>
 
         <input
@@ -389,18 +391,18 @@ export default function NewIncidentPage() {
       {/* 3. ẢNH HIỆN TRƯỜNG XE GẶP SỰ CỐ                           */}
       {/* ======================================================== */}
       <div className="bg-white p-4 sm:p-5 rounded-3xl border border-red-200/90 shadow-xs">
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-            <Camera className="w-4 h-4 text-red-600" />
-            <span>Ảnh hiện trường sự cố *</span>
+        <div className="flex items-center justify-between mb-2 gap-2">
+          <label className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 min-w-0">
+            <Camera className="w-4 h-4 text-red-600 shrink-0" />
+            <span className="truncate">Ảnh hiện trường sự cố *</span>
           </label>
           {photoBlob ? (
-            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1 shrink-0">
               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
               <span>Đã có ảnh</span>
             </span>
           ) : (
-            <span className="text-[10px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-full border border-red-200">
+            <span className="text-[10px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-full border border-red-200 shrink-0">
               Bắt buộc
             </span>
           )}
@@ -485,9 +487,14 @@ export default function NewIncidentPage() {
       {/* 5. GHI CHÚ BẰNG CHỮ (TÙY CHỌN)                           */}
       {/* ======================================================== */}
       <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs">
-        <label className="block text-xs font-bold text-slate-700 mb-1.5">
-          Ghi chú thêm bằng chữ (Tùy chọn)
-        </label>
+        <div className="mb-2 space-y-0.5">
+          <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+            Ghi chú thêm bằng chữ
+          </label>
+          <span className="text-[10px] text-slate-400 font-medium block">
+            (Tùy chọn)
+          </span>
+        </div>
         <input
           type="text"
           value={noteText}

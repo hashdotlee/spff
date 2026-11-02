@@ -202,14 +202,14 @@ export function AudioRecorder({ warehouseId, onSuccess }: AudioRecorderProps) {
 
   return (
     <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-3.5 sm:space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="space-y-1">
         <h3 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 sm:gap-2">
           <Mic className="w-4 h-4 text-orange-600 shrink-0" />
           <span>Thu Âm Voice Chỉ Đường</span>
         </h3>
-        <span className="text-[10px] sm:text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+        <p className="text-[10px] sm:text-[11px] font-medium text-slate-400">
           Tối đa 60 giây
-        </span>
+        </p>
       </div>
 
       <p className="text-xs text-slate-500 leading-relaxed">

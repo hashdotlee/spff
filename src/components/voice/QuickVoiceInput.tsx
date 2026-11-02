@@ -141,18 +141,20 @@ export function QuickVoiceInput({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
+      <div className="space-y-1">
         <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-          <Mic className={`w-3.5 h-3.5 ${isRed ? 'text-red-600' : 'text-orange-600'}`} />
+          <Mic className={`w-3.5 h-3.5 ${isRed ? 'text-red-600' : 'text-orange-600'} shrink-0`} />
           <span>{label}</span>
-          <span className="text-[10px] font-normal text-slate-400 lowercase">(tùy chọn)</span>
         </label>
-        <span className="text-[10px] text-slate-400 font-medium">Tối đa {maxSeconds}s</span>
+        <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium">
+          <span>(Tùy chọn)</span>
+          <span>•</span>
+          <span>Tối đa {maxSeconds}s</span>
+        </div>
+        {helperText && !audioBlob && !isRecording && (
+          <p className="text-[11px] text-slate-500 leading-tight pt-0.5">{helperText}</p>
+        )}
       </div>
-
-      {helperText && !audioBlob && !isRecording && (
-        <p className="text-[11px] text-slate-500 leading-tight">{helperText}</p>
-      )}
 
       {errorMsg && (
         <div className="p-2 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
