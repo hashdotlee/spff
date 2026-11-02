@@ -8,6 +8,7 @@ import type { IncidentType } from '@/types/database';
 import { uploadImageToSupabase } from '@/lib/utils/imageUpload';
 import { QuickVoiceInput } from '@/components/voice/QuickVoiceInput';
 import { geocodeAddress, reverseGeocode } from '@/lib/utils/geocoding';
+import { useProvince } from '@/lib/contexts/ProvinceContext';
 import {
   Camera,
   Image as ImageIcon,
@@ -27,6 +28,7 @@ import {
   HelpCircle,
   MapPin,
   ListOrdered,
+  ChevronDown,
 } from 'lucide-react';
 
 const INCIDENT_TYPES: { type: IncidentType; label: string; icon: any }[] = [
@@ -40,6 +42,7 @@ const INCIDENT_TYPES: { type: IncidentType; label: string; icon: any }[] = [
 
 export default function NewIncidentPage() {
   const router = useRouter();
+  const { province, openPicker } = useProvince();
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [incidentType, setIncidentType] = useState<IncidentType>('broken_vehicle');
@@ -120,7 +123,7 @@ export default function NewIncidentPage() {
     const timer = setTimeout(async () => {
       setIsGeocoding(true);
       try {
-        const results = await geocodeAddress(q);
+        const results = await geocodeAddress(q, province);
         if (results && results.length > 0) {
           setResolvedCoords({
             lat: results[0].latitude,
@@ -137,7 +140,7 @@ export default function NewIncidentPage() {
     }, 700);
 
     return () => clearTimeout(timer);
-  }, [exactAddress]);
+  }, [exactAddress, province]);
 
   // 2. Xử lý khi chọn hoặc chụp ảnh hiện trường
   function handlePhotoCaptured(e: React.ChangeEvent<HTMLInputElement>) {
@@ -257,17 +260,21 @@ export default function NewIncidentPage() {
       let finalAddress = exactAddress.trim() || autoReverseAddress || null;
 
       if (exactAddress.trim()) {
+        const fullAddr = exactAddress.toLowerCase().includes(province.toLowerCase())
+          ? exactAddress.trim()
+          : `${exactAddress.trim()}, ${province}`;
+
         if (resolvedCoords) {
           finalLat = resolvedCoords.lat;
           finalLng = resolvedCoords.lng;
-          finalAddress = exactAddress.trim();
+          finalAddress = fullAddr;
         } else {
           try {
-            const results = await geocodeAddress(exactAddress.trim());
+            const results = await geocodeAddress(exactAddress.trim(), province);
             if (results && results.length > 0) {
               finalLat = results[0].latitude;
               finalLng = results[0].longitude;
-              finalAddress = exactAddress.trim();
+              finalAddress = fullAddr;
             }
           } catch (e) {
             console.warn('Lỗi geocode sự cố:', e);
@@ -596,8 +603,27 @@ export default function NewIncidentPage() {
             Ưu tiên số 1 🎯
           </span>
         </div>
-        <p className="text-[10px] text-slate-500 font-medium">
-          Nếu có địa chỉ cụ thể (số nhà, cột mốc), hệ thống sẽ <strong>ưu tiên định vị theo địa chỉ đó</strong> để anh em cứu hộ đến nhanh nhất. Nếu để trống sẽ dùng <strong>định vị GPS</strong>.
+
+        {/* Tỉnh thành đã chọn & nút đổi tỉnh */}
+        <div className="flex items-center justify-between bg-amber-50/80 border border-amber-200/90 rounded-xl px-2.5 py-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-amber-950">
+            <span className="font-bold">📍 Khu vực:</span>
+            <span className="font-extrabold text-orange-700 bg-white px-2 py-0.5 rounded-md border border-amber-200 shadow-2xs">
+              {province}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={openPicker}
+            className="text-[11px] font-bold text-orange-700 hover:text-orange-900 flex items-center gap-0.5 hover:underline active:scale-95 cursor-pointer"
+          >
+            <span>Đổi tỉnh</span>
+            <ChevronDown className="w-3 h-3" />
+          </button>
+        </div>
+
+        <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+          Nhập số nhà, tên đường, ngõ ngách để hệ thống tự động gán tỉnh <strong>{province}</strong> và <strong>ưu tiên định vị theo địa chỉ đó</strong> giúp anh em cứu hộ đến nhanh nhất. Nếu để trống sẽ dùng <strong>định vị GPS</strong>.
         </p>
 
         <div className="relative">
@@ -605,7 +631,11 @@ export default function NewIncidentPage() {
             type="text"
             value={exactAddress}
             onChange={(e) => setExactAddress(e.target.value)}
-            placeholder={autoReverseAddress ? `VD: ${autoReverseAddress}` : 'VD: Số 55 đường Giải Phóng, Hai Bà Trưng...'}
+            placeholder={
+              autoReverseAddress
+                ? `VD: ${autoReverseAddress}`
+                : `VD: Số 55 đường Giải Phóng, Hai Bà Trưng (ở ${province})...`
+            }
             className="w-full px-3.5 py-2.5 pr-8 rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
           />
           {isGeocoding && (

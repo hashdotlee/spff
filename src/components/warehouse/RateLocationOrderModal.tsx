@@ -10,6 +10,7 @@ import {
   filterRatingsNearLocation,
 } from '@/lib/utils/orderRatings';
 import { geocodeAddress, reverseGeocode } from '@/lib/utils/geocoding';
+import { useProvince } from '@/lib/contexts/ProvinceContext';
 import {
   X,
   Zap,
@@ -25,6 +26,7 @@ import {
   UtensilsCrossed,
   Home,
   Navigation,
+  ChevronDown,
 } from 'lucide-react';
 
 interface RateLocationOrderModalProps {
@@ -48,6 +50,7 @@ export function RateLocationOrderModal({
   onClose,
   onRatingSubmitted,
 }: RateLocationOrderModalProps) {
+  const { province, openPicker } = useProvince();
   const [selectedLevel, setSelectedLevel] = useState<OrderRatingLevel>('ngon');
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
@@ -105,7 +108,7 @@ export function RateLocationOrderModal({
     const timer = setTimeout(async () => {
       setIsGeocoding(true);
       try {
-        const results = await geocodeAddress(q);
+        const results = await geocodeAddress(q, province);
         if (results && results.length > 0) {
           setResolvedCoords({
             lat: results[0].latitude,
@@ -123,7 +126,7 @@ export function RateLocationOrderModal({
     }, 700);
 
     return () => clearTimeout(timer);
-  }, [customAddress]);
+  }, [customAddress, province]);
 
   // Tính toán dự báo nổ đơn theo ngữ cảnh
   let relevantRatings: LocationOrderRating[] = [];
@@ -177,17 +180,21 @@ export function RateLocationOrderModal({
     let finalAddress = isWarehouseMode ? warehouse.address : autoAddress || targetAddress;
 
     if (!isWarehouseMode && customAddress.trim()) {
+      const fullAddr = customAddress.toLowerCase().includes(province.toLowerCase())
+        ? customAddress.trim()
+        : `${customAddress.trim()}, ${province}`;
+
       if (resolvedCoords) {
         finalLat = resolvedCoords.lat;
         finalLng = resolvedCoords.lng;
-        finalAddress = customAddress.trim();
+        finalAddress = fullAddr;
       } else {
         try {
-          const results = await geocodeAddress(customAddress.trim());
+          const results = await geocodeAddress(customAddress.trim(), province);
           if (results && results.length > 0) {
             finalLat = results[0].latitude;
             finalLng = results[0].longitude;
-            finalAddress = customAddress.trim();
+            finalAddress = fullAddr;
           }
         } catch (e) {
           console.warn('Lỗi geocode trước khi lưu:', e);
@@ -277,7 +284,7 @@ export function RateLocationOrderModal({
 
           {/* Bổ sung địa chỉ chính xác khi ở chế độ định vị GPS */}
           {!isWarehouseMode && (
-            <div className="space-y-1 bg-slate-50/60 p-2.5 rounded-2xl border border-slate-200">
+            <div className="space-y-1.5 bg-slate-50/60 p-2.5 rounded-2xl border border-slate-200">
               <div className="flex items-center justify-between">
                 <label className="block text-[11px] font-bold text-slate-700">
                   Địa chỉ chính xác (Tùy chọn):
@@ -286,12 +293,33 @@ export function RateLocationOrderModal({
                   Ưu tiên số 1 🎯
                 </span>
               </div>
+
+              {/* Tỉnh thành đã chọn & nút đổi tỉnh */}
+              <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-2 py-1">
+                <div className="flex items-center gap-1 text-[11px] text-slate-700">
+                  <span className="font-semibold">📍 Khu vực:</span>
+                  <span className="font-bold text-orange-600">{province}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={openPicker}
+                  className="text-[10px] font-bold text-orange-600 hover:text-orange-800 flex items-center gap-0.5 cursor-pointer"
+                >
+                  <span>Đổi tỉnh</span>
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+              </div>
+
               <div className="relative">
                 <input
                   type="text"
                   value={customAddress}
                   onChange={(e) => setCustomAddress(e.target.value)}
-                  placeholder={autoAddress ? `VD: ${autoAddress}` : 'VD: Số 25 ngõ 102 Nguyễn Hoàng...'}
+                  placeholder={
+                    autoAddress
+                      ? `VD: ${autoAddress}`
+                      : `VD: Số 25 ngõ 102 Nguyễn Hoàng (ở ${province})...`
+                  }
                   className="w-full px-3 py-2 pr-8 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
                 {isGeocoding && (

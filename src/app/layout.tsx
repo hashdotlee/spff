@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Navbar } from '@/components/layout/Navbar';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
+import { ProvinceProvider } from '@/lib/contexts/ProvinceContext';
+import { ProvincePickerModal } from '@/components/common/ProvincePickerModal';
 import { Suspense } from 'react';
 
 export const metadata: Metadata = {
@@ -33,15 +35,18 @@ export default function RootLayout({
   return (
     <html lang="vi" className="h-full">
       <body className="min-h-dvh flex flex-col bg-slate-50 text-slate-900 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 antialiased selection:bg-orange-500 selection:text-white overflow-x-hidden">
-        <Suspense fallback={null}>
-          <Navbar />
-        </Suspense>
-        <main className="flex-1 flex flex-col max-w-3xl w-full mx-auto">
-          {children}
-        </main>
-        <Suspense fallback={null}>
-          <BottomNavigation />
-        </Suspense>
+        <ProvinceProvider>
+          <Suspense fallback={null}>
+            <Navbar />
+          </Suspense>
+          <main className="flex-1 flex flex-col max-w-3xl w-full mx-auto">
+            {children}
+          </main>
+          <Suspense fallback={null}>
+            <BottomNavigation />
+          </Suspense>
+          <ProvincePickerModal />
+        </ProvinceProvider>
       </body>
     </html>
   );
