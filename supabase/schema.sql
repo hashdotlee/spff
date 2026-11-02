@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS public.warehouses (
     image_url TEXT,
     created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'reported', 'hidden')),
+    category TEXT NOT NULL DEFAULT 'warehouse' CHECK (category IN ('warehouse', 'eatery', 'customer')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 

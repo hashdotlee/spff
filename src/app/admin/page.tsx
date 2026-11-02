@@ -742,6 +742,21 @@ export default function AdminPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-sm sm:text-base font-bold text-slate-900">{wh.name}</h3>
+
+                      {wh.category === 'eatery' ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          🍜 Quán ăn
+                        </span>
+                      ) : wh.category === 'customer' ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                          🏠 Nhà khách
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-800 border border-orange-200">
+                          🏢 Kho hàng
+                        </span>
+                      )}
+
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
                           wh.status === 'active'

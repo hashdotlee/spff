@@ -24,6 +24,9 @@ import {
   Camera,
   Maximize2,
   X,
+  Building2,
+  UtensilsCrossed,
+  Home,
 } from 'lucide-react';
 
 function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
@@ -215,11 +218,44 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
       {/* Main Info Card */}
       <div className="bg-white rounded-2xl p-4 sm:p-6 border border-slate-200 shadow-xs space-y-3.5 sm:space-y-4">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 shadow-xs">
-            <MapPin className="w-5 h-5 sm:w-6 sm:h-6" />
+          <div
+            className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-xs ${
+              warehouse.category === 'eatery'
+                ? 'bg-emerald-100 text-emerald-600'
+                : warehouse.category === 'customer'
+                ? 'bg-blue-100 text-blue-600'
+                : 'bg-orange-100 text-orange-600'
+            }`}
+          >
+            {warehouse.category === 'eatery' ? (
+              <UtensilsCrossed className="w-5 h-5 sm:w-6 sm:h-6" />
+            ) : warehouse.category === 'customer' ? (
+              <Home className="w-5 h-5 sm:w-6 sm:h-6" />
+            ) : (
+              <MapPin className="w-5 h-5 sm:w-6 sm:h-6" />
+            )}
           </div>
 
           <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5 mb-1">
+              {warehouse.category === 'eatery' ? (
+                <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-xs font-bold inline-flex items-center gap-1">
+                  <UtensilsCrossed className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Quán ăn</span>
+                </span>
+              ) : warehouse.category === 'customer' ? (
+                <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200 text-xs font-bold inline-flex items-center gap-1">
+                  <Home className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Địa chỉ khách hàng</span>
+                </span>
+              ) : (
+                <span className="text-orange-700 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200 text-xs font-bold inline-flex items-center gap-1">
+                  <Building2 className="w-3.5 h-3.5 text-orange-600" />
+                  <span>Kho hàng / Bến bãi</span>
+                </span>
+              )}
+            </div>
+
             <h1 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight leading-snug">
               {warehouse.name}
             </h1>

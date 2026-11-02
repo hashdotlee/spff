@@ -7,7 +7,18 @@ import { formatDistance } from '@/lib/utils/distance';
 import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
 import { VietQRModal } from '@/components/donation/VietQRModal';
 import { ReportWarehouseModal } from '@/components/warehouse/ReportWarehouseModal';
-import { Navigation2, Volume2, MapPin, ChevronRight, Heart, Camera, Flag } from 'lucide-react';
+import {
+  Navigation2,
+  Volume2,
+  MapPin,
+  ChevronRight,
+  Heart,
+  Camera,
+  Flag,
+  Building2,
+  UtensilsCrossed,
+  Home,
+} from 'lucide-react';
 
 interface NearestListProps {
   warehouses: Warehouse[];
@@ -46,7 +57,7 @@ export function NearestList({
       <div className="flex items-center justify-between px-1">
         <h2 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-orange-600 animate-pulse" />
-          <span>Top 5 Kho Gần Nhất</span>
+          <span>Top Điểm Gần Bạn Nhất</span>
         </h2>
         <span className="text-[11px] sm:text-xs text-slate-500 font-medium">Theo khoảng cách</span>
       </div>
@@ -55,6 +66,7 @@ export function NearestList({
         {topWarehouses.map((wh, index) => {
           const isSelected = selectedWarehouseId === wh.id;
           const navUrl = getGoogleMapsNavigationUrl(wh.latitude, wh.longitude);
+          const cat = wh.category || 'warehouse';
 
           return (
             <div
@@ -68,8 +80,16 @@ export function NearestList({
             >
               <div className="flex items-start justify-between gap-2.5">
                 <div className="flex items-start gap-2.5 sm:gap-3 flex-1 min-w-0">
-                  {/* Pin number 1 to 5 */}
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-orange-100 text-orange-700 font-black text-xs sm:text-sm flex items-center justify-center shrink-0 border border-orange-200 shadow-xs">
+                  {/* Pin number 1 to 5 styled by category */}
+                  <div
+                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center shrink-0 border shadow-xs ${
+                      cat === 'eatery'
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                        : cat === 'customer'
+                        ? 'bg-blue-100 text-blue-800 border-blue-200'
+                        : 'bg-orange-100 text-orange-700 border-orange-200'
+                    }`}
+                  >
                     {index + 1}
                   </div>
 
@@ -86,7 +106,7 @@ export function NearestList({
                           setReportWh(wh);
                         }}
                         className="py-1 px-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition active:scale-95 shrink-0 flex items-center gap-1 text-[11px] font-semibold border border-transparent hover:border-red-200"
-                        title="Báo cáo kho sai vị trí hoặc đã dời đi"
+                        title="Báo cáo sai vị trí hoặc đã dời đi"
                       >
                         <Flag className="w-3.5 h-3.5" />
                         <span>Báo cáo</span>
@@ -100,6 +120,24 @@ export function NearestList({
                     )}
 
                     <div className="flex flex-wrap items-center gap-1.5 mt-2 text-xs">
+                      {/* Category Badge */}
+                      {cat === 'eatery' ? (
+                        <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-[11px] font-bold inline-flex items-center gap-1">
+                          <UtensilsCrossed className="w-3 h-3 text-emerald-600" />
+                          <span>Quán ăn</span>
+                        </span>
+                      ) : cat === 'customer' ? (
+                        <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200 text-[11px] font-bold inline-flex items-center gap-1">
+                          <Home className="w-3 h-3 text-blue-600" />
+                          <span>Nhà khách</span>
+                        </span>
+                      ) : (
+                        <span className="text-orange-700 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200 text-[11px] font-bold inline-flex items-center gap-1">
+                          <Building2 className="w-3 h-3 text-orange-600" />
+                          <span>Kho hàng</span>
+                        </span>
+                      )}
+
                       {wh.distance_km !== undefined && (
                         <span className="font-extrabold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200/80 text-[11px]">
                           {formatDistance(wh.distance_km)}

@@ -25,6 +25,9 @@ import {
   User,
   AlertCircle,
   LogOut,
+  Building2,
+  UtensilsCrossed,
+  Home,
 } from 'lucide-react';
 
 function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
@@ -389,9 +392,27 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
                     )}
 
                     <div className="min-w-0 flex-1">
-                      <p className="font-bold text-slate-900 truncate">
-                        {wh.name}
-                      </p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="font-bold text-slate-900 truncate">
+                          {wh.name}
+                        </p>
+                        {wh.category === 'eatery' ? (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 inline-flex items-center gap-0.5">
+                            <UtensilsCrossed className="w-2.5 h-2.5 text-emerald-600" />
+                            <span>Quán ăn</span>
+                          </span>
+                        ) : wh.category === 'customer' ? (
+                          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200 inline-flex items-center gap-0.5">
+                            <Home className="w-2.5 h-2.5 text-blue-600" />
+                            <span>Nhà khách</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-orange-700 bg-orange-50 px-1.5 py-0.2 rounded border border-orange-200 inline-flex items-center gap-0.5">
+                            <Building2 className="w-2.5 h-2.5 text-orange-600" />
+                            <span>Kho hàng</span>
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
                         <span>{wh.voice_notes_count || 0} voice chỉ dẫn</span>
                         <span>•</span>

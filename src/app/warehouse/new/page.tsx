@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { uploadImageToSupabase } from '@/lib/utils/imageUpload';
 import { QuickVoiceInput } from '@/components/voice/QuickVoiceInput';
+import type { PlaceCategory } from '@/types/database';
 import {
   Camera,
   Image as ImageIcon,
@@ -17,6 +18,9 @@ import {
   Loader2,
   MapPin,
   Sparkles,
+  Building2,
+  UtensilsCrossed,
+  Home,
 } from 'lucide-react';
 
 export default function NewWarehousePage() {
@@ -26,6 +30,7 @@ export default function NewWarehousePage() {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioDuration, setAudioDuration] = useState<number>(0);
   const [name, setName] = useState('');
+  const [category, setCategory] = useState<PlaceCategory>('warehouse');
   const [lat, setLat] = useState(21.0285);
   const [lng, setLng] = useState(105.8542);
   const [gpsReady, setGpsReady] = useState(false);
@@ -122,10 +127,16 @@ export default function NewWarehousePage() {
         return;
       }
 
-      // Tên địa chỉ: nếu không nhập, tự đặt tên theo ngày giờ dễ nhận diện
+      // Tên địa chỉ: nếu không nhập, tự đặt tên theo phân loại và thời gian
       const now = new Date();
       const timeStr = `${now.getHours()}h${String(now.getMinutes()).padStart(2, '0')}`;
-      const finalName = name.trim() || `Điểm ghim bến bãi (${timeStr})`;
+      const defaultName =
+        category === 'eatery'
+          ? `Quán ăn (${timeStr})`
+          : category === 'customer'
+          ? `Địa chỉ khách (${timeStr})`
+          : `Kho bãi (${timeStr})`;
+      const finalName = name.trim() || defaultName;
 
       // A. Tải ảnh lên Storage
       setStatusText('Đang tải ảnh hiện trường lên...');
@@ -137,7 +148,7 @@ export default function NewWarehousePage() {
         compress: true,
       });
 
-      // B. Insert vào bảng warehouses
+      // B. Insert vào bảng warehouses (kèm category, mặc định là 'warehouse')
       setStatusText('Đang ghim vị trí lên bản đồ...');
       const insertPayload: any = {
         name: finalName,
@@ -145,6 +156,7 @@ export default function NewWarehousePage() {
         longitude: lng,
         image_url: uploadedImageUrl,
         created_by: user.id,
+        category: category,
         status: 'active',
       };
 
@@ -154,8 +166,9 @@ export default function NewWarehousePage() {
         .select()
         .single();
 
-      if (whError && (whError.code === '42703' || whError.message.includes('image_url'))) {
+      if (whError && (whError.code === '42703' || whError.message.includes('image_url') || whError.message.includes('category'))) {
         delete insertPayload.image_url;
+        delete insertPayload.category;
         const retryResult = await supabase
           .from('warehouses')
           .insert(insertPayload)
@@ -385,6 +398,59 @@ export default function NewWarehousePage() {
             />
           </div>
 
+          {/* Phân loại địa chỉ */}
+          <div className="pt-1 border-t border-slate-100">
+            <div className="mb-2 space-y-0.5">
+              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                Phân loại địa điểm
+              </label>
+              <span className="text-[10px] text-slate-500 font-medium block">
+                Mặc định là Kho hàng. Bấm chọn nếu là Quán ăn hoặc Địa chỉ khách.
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setCategory('warehouse')}
+                className={`py-2.5 px-2 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer ${
+                  category === 'warehouse'
+                    ? 'border-orange-500 bg-orange-50 text-orange-800 ring-2 ring-orange-500/20 shadow-xs'
+                    : 'border-slate-200 bg-slate-50/60 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Building2 className={`w-5 h-5 ${category === 'warehouse' ? 'text-orange-600' : 'text-slate-400'}`} />
+                <span>Kho hàng</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCategory('eatery')}
+                className={`py-2.5 px-2 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer ${
+                  category === 'eatery'
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500/20 shadow-xs'
+                    : 'border-slate-200 bg-slate-50/60 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <UtensilsCrossed className={`w-5 h-5 ${category === 'eatery' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                <span>Quán ăn</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCategory('customer')}
+                className={`py-2.5 px-2 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer ${
+                  category === 'customer'
+                    ? 'border-blue-500 bg-blue-50 text-blue-800 ring-2 ring-blue-500/20 shadow-xs'
+                    : 'border-slate-200 bg-slate-50/60 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Home className={`w-5 h-5 ${category === 'customer' ? 'text-blue-600' : 'text-slate-400'}`} />
+                <span>Nhà khách</span>
+              </button>
+            </div>
+          </div>
+
           {/* Optional Text Input */}
           <div className="pt-1 border-t border-slate-100">
             <div className="mb-2 space-y-0.5">
@@ -399,7 +465,13 @@ export default function NewWarehousePage() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="VD: Cổng 2 Kho Shopee Nam An Khánh..."
+              placeholder={
+                category === 'eatery'
+                  ? 'VD: Quán Cơm Xe Tải 79, Phở Bò Bác Ba...'
+                  : category === 'customer'
+                  ? 'VD: Nhà riêng anh Hùng, Cty Nhựa Tiến Đạt...'
+                  : 'VD: Cổng 2 Kho Shopee Nam An Khánh...'
+              }
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
             />
           </div>

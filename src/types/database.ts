@@ -1,5 +1,6 @@
 export type UserRole = 'user' | 'admin';
 export type WarehouseStatus = 'active' | 'reported' | 'hidden';
+export type PlaceCategory = 'warehouse' | 'eatery' | 'customer';
 export type VoiceNoteStatus = 'active' | 'hidden';
 export type ReportStatus = 'pending' | 'resolved' | 'dismissed';
 export type IncidentType =
@@ -39,6 +40,7 @@ export interface Warehouse {
   image_url?: string | null;
   created_by: string | null;
   status: WarehouseStatus;
+  category?: PlaceCategory;
   created_at: string;
   // Computed / Joined fields
   distance_km?: number;

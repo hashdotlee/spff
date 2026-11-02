@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import type { Warehouse, Incident } from '@/types/database';
+import type { Warehouse, Incident, PlaceCategory } from '@/types/database';
 import { calculateHaversineDistance, formatDistance } from '@/lib/utils/distance';
 import { NearestList } from '@/components/warehouse/NearestList';
 import {
@@ -15,6 +15,9 @@ import {
   Search,
   Siren,
   ChevronRight,
+  Building2,
+  UtensilsCrossed,
+  Home,
 } from 'lucide-react';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), {
@@ -40,6 +43,7 @@ export default function HomePage() {
   const [locating, setLocating] = useState(false);
   const [locationDenied, setLocationDenied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<PlaceCategory | 'all'>('warehouse');
 
   const supabase = createClient();
 
@@ -156,6 +160,12 @@ export default function HomePage() {
     })
     .sort((a, b) => (a.distance_km || 0) - (b.distance_km || 0))
     .filter((wh) => {
+      // Phân loại địa điểm: Mặc định lọc kho hàng
+      const whCat = wh.category || 'warehouse';
+      if (categoryFilter !== 'all' && whCat !== categoryFilter) {
+        return false;
+      }
+
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
       return (
@@ -174,7 +184,7 @@ export default function HomePage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm tên kho, bến bãi, địa chỉ..."
+            placeholder="Tìm tên kho, bến bãi, quán ăn, địa chỉ..."
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-xs"
           />
         </div>
@@ -182,11 +192,93 @@ export default function HomePage() {
         <Link
           href="/warehouse/new"
           className="py-2.5 px-3 sm:px-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm shrink-0 active:scale-95"
-          title="Ghim địa chỉ bến bãi nhanh"
+          title="Ghim địa chỉ mới"
         >
           <PlusCircle className="w-4 h-4" />
           <span className="hidden xs:inline">Ghim địa chỉ</span>
         </Link>
+      </div>
+
+      {/* Category Filter Buttons: Kho hàng (Mặc định) / Quán ăn / Nhà khách / Tất cả */}
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+        <button
+          type="button"
+          onClick={() => setCategoryFilter('warehouse')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer ${
+            categoryFilter === 'warehouse'
+              ? 'bg-orange-600 text-white shadow-xs'
+              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <Building2 className="w-3.5 h-3.5" />
+          <span>Kho hàng</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              categoryFilter === 'warehouse' ? 'bg-orange-700 text-white' : 'bg-slate-100 text-slate-600'
+            }`}
+          >
+            {warehouses.filter((w) => (w.category || 'warehouse') === 'warehouse').length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setCategoryFilter('eatery')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer ${
+            categoryFilter === 'eatery'
+              ? 'bg-emerald-600 text-white shadow-xs'
+              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <UtensilsCrossed className="w-3.5 h-3.5" />
+          <span>Quán ăn</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              categoryFilter === 'eatery' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-600'
+            }`}
+          >
+            {warehouses.filter((w) => w.category === 'eatery').length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setCategoryFilter('customer')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer ${
+            categoryFilter === 'customer'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <Home className="w-3.5 h-3.5" />
+          <span>Nhà khách</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              categoryFilter === 'customer' ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600'
+            }`}
+          >
+            {warehouses.filter((w) => w.category === 'customer').length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setCategoryFilter('all')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer ${
+            categoryFilter === 'all'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <span>Tất cả</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              categoryFilter === 'all' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600'
+            }`}
+          >
+            {warehouses.length}
+          </span>
+        </button>
       </div>
 
       {/* Geolocation Notice if denied */}
