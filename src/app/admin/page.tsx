@@ -774,6 +774,10 @@ export default function AdminPage() {
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
                           🏠 Nhà khách
                         </span>
+                      ) : wh.category === 'parking' ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                          🅿️ Bãi giữ xe
+                        </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-800 border border-orange-200">
                           🏢 Kho hàng

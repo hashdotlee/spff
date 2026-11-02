@@ -4,13 +4,20 @@ import { Suspense, useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import type { Warehouse, VoiceNote, UserRole } from '@/types/database';
+import type { Warehouse, VoiceNote, UserRole, LocationOrderRating } from '@/types/database';
 import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
 import { deleteWarehouse, toggleWarehousePrivacy } from '@/lib/utils/adminActions';
+import {
+  fetchOrderRatings,
+  calculateOrderPrediction,
+  getHourlyBreakdown,
+  ORDER_RATING_CONFIG,
+} from '@/lib/utils/orderRatings';
 import { AudioRecorder } from '@/components/voice/AudioRecorder';
 import { VoiceNoteCard } from '@/components/voice/VoiceNoteCard';
 import { VietQRModal } from '@/components/donation/VietQRModal';
 import { ReportWarehouseModal } from '@/components/warehouse/ReportWarehouseModal';
+import { RateLocationOrderModal } from '@/components/warehouse/RateLocationOrderModal';
 import {
   Navigation2,
   MapPin,
@@ -27,8 +34,13 @@ import {
   Building2,
   UtensilsCrossed,
   Home,
+  CircleParking,
   Lock,
   Globe,
+  Zap,
+  TrendingUp,
+  Clock,
+  Sparkles,
 } from 'lucide-react';
 
 function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
@@ -46,6 +58,8 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
   const [showPinnerQRModal, setShowPinnerQRModal] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
+  const [orderRatings, setOrderRatings] = useState<LocationOrderRating[]>([]);
+  const [showRateOrderModal, setShowRateOrderModal] = useState(false);
 
   const supabase = createClient();
 
@@ -114,6 +128,10 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
           setVoiceNotes(notesData);
         }
       }
+
+      // Load order ratings
+      const ratings = await fetchOrderRatings(supabase, warehouseId);
+      setOrderRatings(ratings);
     } catch (err) {
       console.error('Error loading warehouse:', err);
     } finally {
@@ -231,6 +249,8 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
   }
 
   const navUrl = getGoogleMapsNavigationUrl(warehouse.latitude, warehouse.longitude);
+  const prediction = calculateOrderPrediction(orderRatings);
+  const hourlyBreakdown = getHourlyBreakdown(orderRatings);
 
   return (
     <div className="p-3 sm:p-6 max-w-2xl mx-auto w-full space-y-4 sm:space-y-5">
@@ -317,6 +337,8 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
                 ? 'bg-emerald-100 text-emerald-600'
                 : warehouse.category === 'customer'
                 ? 'bg-blue-100 text-blue-600'
+                : warehouse.category === 'parking'
+                ? 'bg-indigo-100 text-indigo-600'
                 : 'bg-orange-100 text-orange-600'
             }`}
           >
@@ -324,6 +346,8 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
               <UtensilsCrossed className="w-5 h-5 sm:w-6 sm:h-6" />
             ) : warehouse.category === 'customer' ? (
               <Home className="w-5 h-5 sm:w-6 sm:h-6" />
+            ) : warehouse.category === 'parking' ? (
+              <CircleParking className="w-5 h-5 sm:w-6 sm:h-6" />
             ) : (
               <MapPin className="w-5 h-5 sm:w-6 sm:h-6" />
             )}
@@ -340,6 +364,11 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
                 <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200 text-xs font-bold inline-flex items-center gap-1">
                   <Home className="w-3.5 h-3.5 text-blue-600" />
                   <span>Địa chỉ khách hàng</span>
+                </span>
+              ) : warehouse.category === 'parking' ? (
+                <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200 text-xs font-bold inline-flex items-center gap-1">
+                  <CircleParking className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Bãi giữ xe / Đỗ xe</span>
                 </span>
               ) : (
                 <span className="text-orange-700 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200 text-xs font-bold inline-flex items-center gap-1">
@@ -489,6 +518,145 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
         </a>
       </div>
 
+      {/* Tình hình nổ đơn theo giờ (Đánh giá thực tế từ tài xế) */}
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-3.5">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+              <Zap className="w-4 h-4 fill-current" />
+            </div>
+            <div>
+              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <span>Tình Hình Nổ Đơn Theo Giờ</span>
+              </h2>
+              <span className="text-[11px] text-slate-500 font-medium block">
+                Dựa trên đánh giá thực tế của anh em tài xế
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowRateOrderModal(true)}
+            className="py-1.5 px-3 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-xl text-xs font-bold transition active:scale-95 flex items-center gap-1.5 shadow-xs cursor-pointer"
+          >
+            <Zap className="w-3.5 h-3.5 fill-current" />
+            <span>Báo nổ đơn (+2đ ⭐)</span>
+          </button>
+        </div>
+
+        {/* Current Hour Status Highlight */}
+        <div className={`p-3.5 rounded-2xl border ${prediction.hasData ? prediction.bgClass : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+          <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+            <div className="flex items-center gap-1.5 font-black text-xs sm:text-sm">
+              <Clock className="w-4 h-4" />
+              <span>Khung giờ hiện tại ({new Date().getHours()}h):</span>
+              <span className="underline underline-offset-2">{prediction.badgeText}</span>
+            </div>
+            {prediction.hasData && (
+              <span className="text-xs font-black">
+                {prediction.avgScore} / 4.0 ⭐
+              </span>
+            )}
+          </div>
+          <p className="text-xs leading-relaxed opacity-90">
+            {prediction.description}
+          </p>
+        </div>
+
+        {/* 24-Hour Timeline / Matrix */}
+        <div className="space-y-1.5 pt-1">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 font-semibold">
+            <span>Dự báo các khung giờ trong ngày:</span>
+            <div className="flex items-center gap-2 text-[10px]">
+              <span className="flex items-center gap-0.5 text-emerald-700">🟢 Ngon</span>
+              <span className="flex items-center gap-0.5 text-amber-700">🟡 Tạm</span>
+              <span className="flex items-center gap-0.5 text-orange-700">🟠 Khê</span>
+              <span className="flex items-center gap-0.5 text-rose-700">🔴 Móm</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+            {hourlyBreakdown.map((item) => {
+              const isCurrent = item.hour === new Date().getHours();
+              const levelColor =
+                item.level === 'ngon'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-black'
+                  : item.level === 'tam'
+                  ? 'bg-amber-50 text-amber-800 border-amber-300 font-bold'
+                  : item.level === 'khe'
+                  ? 'bg-orange-50 text-orange-800 border-orange-300 font-bold'
+                  : item.level === 'mom'
+                  ? 'bg-rose-50 text-rose-800 border-rose-300 font-bold'
+                  : 'bg-slate-50 text-slate-400 border-slate-200 font-normal';
+
+              return (
+                <div
+                  key={item.hour}
+                  className={`p-1.5 rounded-xl border text-center transition ${levelColor} ${
+                    isCurrent ? 'ring-2 ring-orange-500 ring-offset-1 shadow-xs' : ''
+                  }`}
+                  title={`Khung giờ ${item.hour}h: ${item.count > 0 ? `${item.avgScore}/4⭐ (${item.count} lượt báo)` : 'Chưa có dữ liệu'}`}
+                >
+                  <span className="text-[10px] block leading-none mb-0.5">
+                    {item.hour}h
+                  </span>
+                  <span className="text-[9px] block leading-none">
+                    {item.level === 'ngon' && '🔥'}
+                    {item.level === 'tam' && '🛵'}
+                    {item.level === 'khe' && '⏳'}
+                    {item.level === 'mom' && '🦗'}
+                    {!item.level && '—'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Recent Driver Ratings */}
+        {orderRatings.length > 0 && (
+          <div className="pt-2 border-t border-slate-100 space-y-2">
+            <span className="text-[11px] font-bold text-slate-700 block">
+              Các báo cáo gần đây:
+            </span>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {orderRatings.slice(0, 5).map((r) => {
+                const cfg = ORDER_RATING_CONFIG[r.rating];
+                return (
+                  <div
+                    key={r.id}
+                    className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-2 text-xs"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-slate-900">
+                          {r.user?.full_name || 'Bác tài ẩn danh'}
+                        </span>
+                        <span className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded border ${cfg.bgClass} ${cfg.borderClass} ${cfg.textClass}`}>
+                          {cfg.badgeText}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          (Lúc {r.hour_of_day}h)
+                        </span>
+                      </div>
+                      {r.note && (
+                        <p className="text-[11px] text-slate-600 mt-1 leading-snug">
+                          {r.note}
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-400 shrink-0">
+                      {new Date(r.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Audio Recorder section */}
       <AudioRecorder warehouseId={warehouseId} onSuccess={loadData} />
 
@@ -579,6 +747,17 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
             />
           </div>
         </div>
+      )}
+      {/* Modal Báo tình hình nổ đơn */}
+      {showRateOrderModal && warehouse && (
+        <RateLocationOrderModal
+          warehouse={warehouse}
+          existingRatings={orderRatings}
+          onClose={() => setShowRateOrderModal(false)}
+          onRatingSubmitted={(newRating) => {
+            setOrderRatings((prev) => [newRating, ...prev]);
+          }}
+        />
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 export type UserRole = 'user' | 'admin';
 export type WarehouseStatus = 'active' | 'reported' | 'hidden';
-export type PlaceCategory = 'warehouse' | 'eatery' | 'customer';
+export type PlaceCategory = 'warehouse' | 'eatery' | 'customer' | 'parking';
+export type OrderRatingLevel = 'ngon' | 'tam' | 'khe' | 'mom';
 export type VoiceNoteStatus = 'active' | 'hidden';
 export type ReportStatus = 'pending' | 'resolved' | 'dismissed';
 export type IncidentType =
@@ -47,6 +48,7 @@ export interface Warehouse {
   distance_km?: number;
   voice_notes_count?: number;
   creator?: Profile | null;
+  order_prediction?: OrderPredictionResult;
 }
 
 export interface VoiceNote {
@@ -138,4 +140,32 @@ export interface IncidentHelper {
   created_at: string;
   // Joined fields
   helper?: Profile | null;
+}
+
+export interface LocationOrderRating {
+  id: string;
+  warehouse_id: string;
+  user_id: string | null;
+  rating: OrderRatingLevel;
+  score: number; // 4: ngon, 3: tam, 2: khe, 1: mom
+  hour_of_day: number; // 0..23
+  note: string | null;
+  created_at: string;
+  // Joined
+  user?: Profile | null;
+  warehouse?: Warehouse | null;
+}
+
+export interface OrderPredictionResult {
+  hasData: boolean;
+  currentHour: number;
+  avgScore: number;
+  totalCount: number;
+  level: OrderRatingLevel | null;
+  label: string;
+  badgeText: string;
+  color: 'emerald' | 'amber' | 'orange' | 'rose' | 'slate';
+  bgClass: string;
+  description: string;
+  recentReportsCount: number;
 }

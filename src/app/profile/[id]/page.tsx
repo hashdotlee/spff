@@ -28,6 +28,7 @@ import {
   Building2,
   UtensilsCrossed,
   Home,
+  CircleParking,
   Lock,
   Globe,
 } from 'lucide-react';
@@ -420,6 +421,11 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
                           <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200 inline-flex items-center gap-0.5">
                             <Home className="w-2.5 h-2.5 text-blue-600" />
                             <span>Nhà khách</span>
+                          </span>
+                        ) : wh.category === 'parking' ? (
+                          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200 inline-flex items-center gap-0.5">
+                            <CircleParking className="w-2.5 h-2.5 text-indigo-600" />
+                            <span>Bãi xe</span>
                           </span>
                         ) : (
                           <span className="text-[10px] font-bold text-orange-700 bg-orange-50 px-1.5 py-0.2 rounded border border-orange-200 inline-flex items-center gap-0.5">

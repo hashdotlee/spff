@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import type { Warehouse, Incident, PlaceCategory } from '@/types/database';
+import type { Warehouse, Incident, PlaceCategory, LocationOrderRating } from '@/types/database';
 import { calculateHaversineDistance, formatDistance } from '@/lib/utils/distance';
 import { NearestList } from '@/components/warehouse/NearestList';
+import { RateLocationOrderModal } from '@/components/warehouse/RateLocationOrderModal';
+import { fetchOrderRatings, calculateOrderPrediction } from '@/lib/utils/orderRatings';
 import {
   MapPin,
   PlusCircle,
@@ -18,6 +20,8 @@ import {
   Building2,
   UtensilsCrossed,
   Home,
+  CircleParking,
+  Zap,
 } from 'lucide-react';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), {
@@ -39,6 +43,8 @@ export default function HomePage() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
+  const [orderRatings, setOrderRatings] = useState<LocationOrderRating[]>([]);
+  const [ratingWarehouse, setRatingWarehouse] = useState<Warehouse | null>(null);
   const [loading, setLoading] = useState(true);
   const [locating, setLocating] = useState(false);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -146,10 +152,21 @@ export default function HomePage() {
     }
   }
 
+  // 4. Fetch real-time order ratings (Đánh giá nổ đơn theo giờ)
+  async function loadOrderRatings() {
+    try {
+      const ratings = await fetchOrderRatings(supabase);
+      setOrderRatings(ratings);
+    } catch (err) {
+      console.warn('Lỗi loadOrderRatings:', err);
+    }
+  }
+
   useEffect(() => {
     requestLocation();
     loadWarehouses();
     loadIncidents();
+    loadOrderRatings();
   }, []);
 
   // 4. Compute distances using Haversine formula and sort
@@ -178,7 +195,9 @@ export default function HomePage() {
           wh.longitude
         );
       }
-      return { ...wh, distance_km };
+      const whRatings = orderRatings.filter((r) => r.warehouse_id === wh.id);
+      const order_prediction = calculateOrderPrediction(whRatings);
+      return { ...wh, distance_km, order_prediction };
     })
     .sort((a, b) => (a.distance_km || 0) - (b.distance_km || 0))
     .filter((wh) => {
@@ -285,6 +304,26 @@ export default function HomePage() {
 
         <button
           type="button"
+          onClick={() => setCategoryFilter('parking')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer ${
+            categoryFilter === 'parking'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <CircleParking className="w-3.5 h-3.5" />
+          <span>Bãi giữ xe</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              categoryFilter === 'parking' ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-600'
+            }`}
+          >
+            {warehouses.filter((w) => w.category === 'parking').length}
+          </span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setCategoryFilter('all')}
           className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer ${
             categoryFilter === 'all'
@@ -355,14 +394,48 @@ export default function HomePage() {
           selectedIncidentId={selectedIncident?.id}
           onSelectWarehouse={(wh) => setSelectedWarehouse(wh)}
           onSelectIncident={(inc) => setSelectedIncident(inc)}
+          onRateOrder={(wh) => setRatingWarehouse(wh)}
           className="h-64 sm:h-80 w-full rounded-2xl overflow-hidden shadow-xs border border-slate-200"
         />
+
+        {/* Nút đánh giá điểm hiện tại / điểm đã chọn trên bản đồ */}
+        <button
+          onClick={() => {
+            const targetWh = selectedWarehouse || sortedWarehouses[0];
+            if (targetWh) {
+              setRatingWarehouse(targetWh);
+            } else {
+              alert('Chưa có địa điểm nào gần bạn để đánh giá. Bạn có thể bấm "Ghim địa chỉ" để thêm điểm mới!');
+            }
+          }}
+          className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-xs hover:bg-white text-slate-800 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl shadow-md border border-slate-200 hover:border-orange-400 transition active:scale-95 flex items-center gap-2 cursor-pointer text-xs font-bold group"
+          title="Báo tình hình nổ đơn tại điểm hiện tại"
+        >
+          <div className="w-6 h-6 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 group-hover:bg-orange-600 group-hover:text-white transition">
+            <Zap className="w-3.5 h-3.5 fill-current" />
+          </div>
+          <div className="text-left">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-black text-slate-900">Báo nổ đơn</span>
+              <span className="text-[10px] text-orange-600 font-extrabold px-1 py-0.2 rounded bg-orange-50 border border-orange-200">
+                +2đ ⭐
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-500 font-medium block truncate max-w-[130px] xs:max-w-[180px]">
+              {selectedWarehouse
+                ? `Tại: ${selectedWarehouse.name}`
+                : sortedWarehouses[0]?.name
+                ? `Tại: ${sortedWarehouses[0].name}`
+                : 'Điểm hiện tại'}
+            </span>
+          </div>
+        </button>
 
         {/* Locate me button on Map overlay */}
         <button
           onClick={requestLocation}
           disabled={locating}
-          className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-10 bg-white text-slate-800 w-11 h-11 rounded-xl shadow-lg border border-slate-200 hover:bg-slate-50 transition active:scale-90 flex items-center justify-center"
+          className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-10 bg-white text-slate-800 w-11 h-11 rounded-xl shadow-lg border border-slate-200 hover:bg-slate-50 transition active:scale-90 flex items-center justify-center cursor-pointer"
           title="Định vị vị trí hiện tại"
         >
           <LocateFixed className={`w-5 h-5 text-orange-600 ${locating ? 'animate-spin' : ''}`} />
@@ -379,6 +452,19 @@ export default function HomePage() {
           warehouses={sortedWarehouses}
           selectedWarehouseId={selectedWarehouse?.id}
           onSelectWarehouse={(wh) => setSelectedWarehouse(wh)}
+          onRateOrder={(wh) => setRatingWarehouse(wh)}
+        />
+      )}
+
+      {/* Modal Báo tình hình nổ đơn */}
+      {ratingWarehouse && (
+        <RateLocationOrderModal
+          warehouse={ratingWarehouse}
+          existingRatings={orderRatings.filter((r) => r.warehouse_id === ratingWarehouse.id)}
+          onClose={() => setRatingWarehouse(null)}
+          onRatingSubmitted={(newRating) => {
+            setOrderRatings((prev) => [newRating, ...prev]);
+          }}
         />
       )}
     </div>

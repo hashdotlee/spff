@@ -19,19 +19,23 @@ import {
   Building2,
   UtensilsCrossed,
   Home,
+  CircleParking,
   Lock,
+  Zap,
 } from 'lucide-react';
 
 interface NearestListProps {
   warehouses: Warehouse[];
   selectedWarehouseId?: string | null;
   onSelectWarehouse?: (warehouse: Warehouse) => void;
+  onRateOrder?: (warehouse: Warehouse) => void;
 }
 
 export function NearestList({
   warehouses,
   selectedWarehouseId,
   onSelectWarehouse,
+  onRateOrder,
 }: NearestListProps) {
   const router = useRouter();
   const [thankWh, setThankWh] = useState<Warehouse | null>(null);
@@ -93,6 +97,8 @@ export function NearestList({
                         ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
                         : cat === 'customer'
                         ? 'bg-blue-100 text-blue-800 border-blue-200'
+                        : cat === 'parking'
+                        ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
                         : 'bg-orange-100 text-orange-700 border-orange-200'
                     }`}
                   >
@@ -137,6 +143,11 @@ export function NearestList({
                           <Home className="w-3 h-3 text-blue-600" />
                           <span>Nhà khách</span>
                         </span>
+                      ) : cat === 'parking' ? (
+                        <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200 text-[11px] font-bold inline-flex items-center gap-1">
+                          <CircleParking className="w-3 h-3 text-indigo-600" />
+                          <span>Bãi giữ xe</span>
+                        </span>
                       ) : (
                         <span className="text-orange-700 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200 text-[11px] font-bold inline-flex items-center gap-1">
                           <Building2 className="w-3 h-3 text-orange-600" />
@@ -169,6 +180,30 @@ export function NearestList({
                         <Volume2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span>{wh.voice_notes_count || 0} voice chỉ đường</span>
                       </span>
+
+                      {/* Tình hình nổ đơn badge & button */}
+                      {wh.order_prediction && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRateOrder?.(wh);
+                          }}
+                          className={`px-2 py-0.5 rounded-md text-[11px] font-bold border transition active:scale-95 inline-flex items-center gap-1 cursor-pointer ${
+                            wh.order_prediction.hasData
+                              ? wh.order_prediction.bgClass
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                          title="Bấm để xem hoặc báo tình hình nổ đơn lúc này"
+                        >
+                          <Zap className="w-3 h-3 text-orange-500 fill-current shrink-0" />
+                          <span>
+                            {wh.order_prediction.hasData
+                              ? `${new Date().getHours()}h: ${wh.order_prediction.badgeText} (${wh.order_prediction.avgScore}/4⭐)`
+                              : 'Báo đơn (+2đ)'}
+                          </span>
+                        </button>
+                      )}
                     </div>
 
                     {wh.creator && (

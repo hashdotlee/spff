@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { recalculateReputation } from '@/lib/utils/adminActions';
 import { Mic, Square, Play, Pause, Trash2, Send, AlertCircle, CheckCircle } from 'lucide-react';
 
 interface AudioRecorderProps {
@@ -182,22 +183,9 @@ export function AudioRecorder({ warehouseId, onSuccess }: AudioRecorderProps) {
         throw new Error(dbError.message);
       }
 
-      // 3. Cập nhật điểm cống hiến cho tài xế (+5 điểm khi đóng góp voice)
+      // 3. Cập nhật lại điểm cống hiến cho tài xế (+5 điểm khi đóng góp voice)
       try {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('reputation_score')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        if (prof) {
-          await supabase
-            .from('profiles')
-            .update({
-              reputation_score: (prof.reputation_score || 0) + 5,
-            })
-            .eq('id', user.id);
-        }
+        await recalculateReputation(supabase, user.id);
       } catch (repErr) {
         console.warn('Lỗi cập nhật điểm cống hiến voice:', repErr);
       }

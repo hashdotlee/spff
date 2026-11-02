@@ -12,15 +12,6 @@ export async function recalculateReputation(
   if (!userId) return;
 
   try {
-    const { error: rpcError } = await supabase.rpc('recalculate_user_reputation', {
-      target_user_id: userId,
-    });
-    if (!rpcError) return;
-  } catch {
-    // Fallback nếu RPC chưa chạy migration
-  }
-
-  try {
     const { data: prof } = await supabase
       .from('profiles')
       .select('is_banned, reputation_score')
@@ -38,7 +29,8 @@ export async function recalculateReputation(
       return;
     }
 
-    // Đếm kho công khai active (+10đ mỗi kho công khai)
+    // Đếm kho CÔNG KHAI active (+10đ mỗi kho công khai)
+    // Lưu ý: Chỉ kho công khai (is_private != true) mới được tính điểm cống hiến
     let whCount = 0;
     try {
       const { count, error } = await supabase
@@ -67,7 +59,19 @@ export async function recalculateReputation(
       .eq('user_id', userId)
       .eq('status', 'active');
 
-    const totalPts = Math.max(0, (whCount || 0) * 10 + (vnCount || 0) * 5);
+    // Đếm lượt báo tình hình nổ đơn (+2đ mỗi lượt)
+    let ratingCount = 0;
+    try {
+      const { count } = await supabase
+        .from('location_order_ratings')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId);
+      ratingCount = count || 0;
+    } catch {
+      // Bảng chưa tạo thì bỏ qua
+    }
+
+    const totalPts = Math.max(0, (whCount || 0) * 10 + (vnCount || 0) * 5 + ratingCount * 2);
 
     await supabase
       .from('profiles')

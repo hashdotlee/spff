@@ -14,6 +14,7 @@ interface MapViewProps {
   selectedIncidentId?: string | null;
   onSelectWarehouse?: (warehouse: Warehouse) => void;
   onSelectIncident?: (incident: Incident) => void;
+  onRateOrder?: (warehouse: Warehouse) => void;
   className?: string;
 }
 
@@ -25,6 +26,7 @@ export default function MapView({
   selectedIncidentId,
   onSelectWarehouse,
   onSelectIncident,
+  onRateOrder,
   className = 'h-80 w-full rounded-2xl overflow-hidden shadow-inner',
 }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -100,6 +102,20 @@ export default function MapView({
     };
   }, []);
 
+  // Handler for rate order clicks inside Leaflet popup HTML
+  useEffect(() => {
+    (window as any).__spff_rate_order = (whId: string) => {
+      const target = warehouses.find((w) => w.id === whId);
+      if (target && onRateOrder) {
+        onRateOrder(target);
+      }
+    };
+
+    return () => {
+      delete (window as any).__spff_rate_order;
+    };
+  }, [warehouses, onRateOrder]);
+
   // Update center when userLocation is first received or updated
   useEffect(() => {
     if (
@@ -167,6 +183,7 @@ export default function MapView({
       let defaultBgColor = '#ea580c'; // orange for warehouse
       if (cat === 'eatery') defaultBgColor = '#059669'; // emerald for eatery
       if (cat === 'customer') defaultBgColor = '#2563eb'; // blue for customer
+      if (cat === 'parking') defaultBgColor = '#4f46e5'; // indigo for parking
 
       const bgColor = isSelected ? '#b91c1c' : defaultBgColor;
 
@@ -175,11 +192,22 @@ export default function MapView({
           ? `<span style="background-color: #ecfdf5; color: #047857; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 6px; border: 1px solid #a7f3d0; display: inline-block; margin-bottom: 4px;">🍜 Quán ăn</span>`
           : cat === 'customer'
           ? `<span style="background-color: #eff6ff; color: #1d4ed8; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 6px; border: 1px solid #bfdbfe; display: inline-block; margin-bottom: 4px;">🏠 Nhà khách</span>`
+          : cat === 'parking'
+          ? `<span style="background-color: #eef2ff; color: #4338ca; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 6px; border: 1px solid #c7d2fe; display: inline-block; margin-bottom: 4px;">🅿️ Bãi giữ xe</span>`
           : `<span style="background-color: #fff7ed; color: #c2410c; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 6px; border: 1px solid #fed7aa; display: inline-block; margin-bottom: 4px;">🏢 Kho hàng</span>`;
 
       const privacyBadge = wh.is_private
         ? `<span style="background-color: #faf5ff; color: #7e22ce; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 6px; border: 1px solid #e9d5ff; display: inline-block; margin-bottom: 4px; margin-left: 4px;">🔒 Riêng tư</span>`
         : '';
+
+      const pred = wh.order_prediction;
+      const curHour = new Date().getHours();
+      const orderBadge = pred && pred.hasData
+        ? `<div style="margin: 4px 0; padding: 3px 6px; background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; font-size: 10px; display: flex; align-items: center; justify-content: space-between;">
+             <span>⚡ <strong>Lúc ${curHour}h:</strong> ${pred.badgeText}</span>
+             <span style="font-weight: bold; color: #c2410c;">${pred.avgScore}/4⭐</span>
+           </div>`
+        : `<div style="margin: 4px 0; font-size: 10px; color: #64748b;">⚡ Lúc ${curHour}h: Chưa có báo đơn</div>`;
 
       const pinIcon = L.divIcon({
         className: 'custom-warehouse-pin-container',
@@ -225,7 +253,12 @@ export default function MapView({
               ? `<span class="text-[10px] text-slate-500 block mt-0.5">Ghim bởi: <strong class="text-slate-700">${wh.creator.full_name}</strong></span>`
               : ''
           }
-          <div class="mt-2.5 flex items-center gap-1.5">
+          ${orderBadge}
+          <button onclick="window.__spff_rate_order && window.__spff_rate_order('${wh.id}')"
+             style="cursor: pointer; width: 100%; margin-top: 5px; padding: 5px 8px; background: linear-gradient(to right, #ea580c, #d97706); color: white; border-radius: 8px; font-size: 10px; font-weight: bold; border: none; display: flex; align-items: center; justify-content: center; gap: 4px;">
+             ⚡ Báo tình hình nổ đơn (+2đ ⭐)
+          </button>
+          <div class="mt-2 flex items-center gap-1.5">
             <a href="${navUrl}" target="_blank" rel="noopener noreferrer" 
                class="px-2.5 py-1.5 bg-blue-600 text-white rounded-lg text-[11px] font-bold inline-flex items-center justify-center hover:bg-blue-700 active:scale-95 transition">
                Đi ngay 🚀

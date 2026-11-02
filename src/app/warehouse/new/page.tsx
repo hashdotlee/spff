@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { uploadImageToSupabase } from '@/lib/utils/imageUpload';
+import { recalculateReputation } from '@/lib/utils/adminActions';
 import { QuickVoiceInput } from '@/components/voice/QuickVoiceInput';
 import type { PlaceCategory } from '@/types/database';
 import {
@@ -21,6 +22,7 @@ import {
   Building2,
   UtensilsCrossed,
   Home,
+  CircleParking,
   Globe,
   Lock,
 } from 'lucide-react';
@@ -138,6 +140,8 @@ export default function NewWarehousePage() {
           ? `Quán ăn (${timeStr})`
           : category === 'customer'
           ? `Địa chỉ khách (${timeStr})`
+          : category === 'parking'
+          ? `Bãi giữ xe (${timeStr})`
           : `Kho bãi (${timeStr})`;
       const finalName = name.trim() || defaultName;
 
@@ -221,27 +225,11 @@ export default function NewWarehousePage() {
         }
       }
 
-      // D. Cập nhật điểm cống hiến (+10đ cho ghim công khai, +5đ nếu kèm voice)
-      if (!isPrivate) {
-        try {
-          const bonusPoints = audioBlob ? 15 : 10;
-          const { data: prof } = await supabase
-            .from('profiles')
-            .select('reputation_score')
-            .eq('id', user.id)
-            .maybeSingle();
-
-          if (prof) {
-            await supabase
-              .from('profiles')
-              .update({
-                reputation_score: (prof.reputation_score || 0) + bonusPoints,
-              })
-              .eq('id', user.id);
-          }
-        } catch (repErr) {
-          console.warn('Lỗi cập nhật điểm cống hiến:', repErr);
-        }
+      // D. Cập nhật lại điểm cống hiến chuẩn xác (+10đ mỗi điểm ghim CÔNG KHAI, +5đ mỗi voice)
+      try {
+        await recalculateReputation(supabase, user.id);
+      } catch (repErr) {
+        console.warn('Lỗi cập nhật điểm cống hiến:', repErr);
       }
 
       // Hoàn tất -> chuyển thẳng đến trang chi tiết kho vừa tạo
@@ -416,7 +404,7 @@ export default function NewWarehousePage() {
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <button
                 type="button"
                 onClick={() => setCategory('warehouse')}
@@ -454,6 +442,19 @@ export default function NewWarehousePage() {
               >
                 <Home className={`w-5 h-5 ${category === 'customer' ? 'text-blue-600' : 'text-slate-400'}`} />
                 <span>Nhà khách</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCategory('parking')}
+                className={`py-2.5 px-2 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer ${
+                  category === 'parking'
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-800 ring-2 ring-indigo-500/20 shadow-xs'
+                    : 'border-slate-200 bg-slate-50/60 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <CircleParking className={`w-5 h-5 ${category === 'parking' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                <span>Bãi giữ xe</span>
               </button>
             </div>
           </div>
@@ -540,6 +541,8 @@ export default function NewWarehousePage() {
                   ? 'VD: Quán Cơm Xe Tải 79, Phở Bò Bác Ba...'
                   : category === 'customer'
                   ? 'VD: Nhà riêng anh Hùng, Cty Nhựa Tiến Đạt...'
+                  : category === 'parking'
+                  ? 'VD: Bãi đỗ xe tải BigC, Bãi xe bến xe Miền Đông...'
                   : 'VD: Cổng 2 Kho Shopee Nam An Khánh...'
               }
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
