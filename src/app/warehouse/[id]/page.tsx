@@ -250,7 +250,7 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
     );
   }
 
-  const navUrl = getGoogleMapsNavigationUrl(warehouse.latitude, warehouse.longitude);
+  const navUrl = getGoogleMapsNavigationUrl(warehouse.latitude, warehouse.longitude, warehouse.address);
   const cat = warehouse.category || 'warehouse';
   const canRateOrders = cat === 'warehouse' || cat === 'eatery';
   const prediction = calculateOrderPrediction(

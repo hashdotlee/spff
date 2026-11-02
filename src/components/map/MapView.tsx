@@ -332,7 +332,7 @@ export default function MapView({
         popupAnchor: [0, -32],
       });
 
-      const navUrl = getGoogleMapsNavigationUrl(wh.latitude, wh.longitude);
+      const navUrl = getGoogleMapsNavigationUrl(wh.latitude, wh.longitude, wh.address);
 
       const marker = L.marker([wh.latitude, wh.longitude], { icon: pinIcon }).addTo(
         markersLayer
@@ -396,7 +396,7 @@ export default function MapView({
       }
 
       const isSelected = selectedIncidentId === inc.id;
-      const navUrl = getGoogleMapsNavigationUrl(inc.latitude, inc.longitude);
+      const navUrl = getGoogleMapsNavigationUrl(inc.latitude, inc.longitude, inc.address);
 
       const sosIcon = L.divIcon({
         className: 'custom-sos-pin-container',

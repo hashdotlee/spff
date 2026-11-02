@@ -92,7 +92,7 @@ export function IncidentCard({
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const typeInfo = getIncidentTypeInfo(incident.incident_type);
   const IconComponent = typeInfo.icon;
-  const navUrl = getGoogleMapsNavigationUrl(incident.latitude, incident.longitude);
+  const navUrl = getGoogleMapsNavigationUrl(incident.latitude, incident.longitude, incident.address);
   const isOwner = currentUserId && incident.user_id === currentUserId;
   const isHelping = Boolean(incident.current_user_helper);
 

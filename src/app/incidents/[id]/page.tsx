@@ -260,7 +260,7 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
   const IconComponent = typeInfo.icon;
   const isOwner = currentUserId && incident.user_id === currentUserId;
   const isHelper = Boolean(incident.current_user_helper);
-  const navUrl = getGoogleMapsNavigationUrl(incident.latitude, incident.longitude);
+  const navUrl = getGoogleMapsNavigationUrl(incident.latitude, incident.longitude, incident.address);
 
   const audioUrl = incident.audio_url || (incident.description?.includes('[Voice]: ') ? incident.description.split('[Voice]: ')[1].trim() : null);
   const cleanDescription = incident.description?.replace(/\[Voice\]:\s*.+$/, '').trim() || incident.description;

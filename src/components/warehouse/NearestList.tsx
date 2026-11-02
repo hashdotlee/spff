@@ -64,7 +64,7 @@ export function NearestList({
       <div className="space-y-1.5 sm:space-y-2">
         {topWarehouses.map((wh, index) => {
           const isSelected = selectedWarehouseId === wh.id;
-          const navUrl = getGoogleMapsNavigationUrl(wh.latitude, wh.longitude);
+          const navUrl = getGoogleMapsNavigationUrl(wh.latitude, wh.longitude, wh.address);
           const cat = wh.category || 'warehouse';
           const canRateOrders = cat === 'warehouse' || cat === 'eatery';
 

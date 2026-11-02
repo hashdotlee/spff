@@ -38,11 +38,12 @@ export async function GET(request: Request) {
   const lat = searchParams.get('lat');
   const lon = searchParams.get('lon');
 
+  const googleApiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
   try {
     // 1. Forward Geocoding: Tra cứu tọa độ từ địa chỉ chính xác
     if (q) {
       const trimmedQuery = q.trim();
-      const variants = generateVietnameseAddressVariants(trimmedQuery);
       const results: Array<{
         latitude: number;
         longitude: number;
@@ -51,6 +52,36 @@ export async function GET(request: Request) {
         district?: string | null;
         city?: string | null;
       }> = [];
+
+      // Ưu tiên 0: Nếu có GOOGLE_MAPS_API_KEY trong biến môi trường
+      if (googleApiKey) {
+        try {
+          const gUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+            trimmedQuery
+          )}&key=${googleApiKey}&language=vi&region=vn`;
+          const gRes = await fetch(gUrl, { cache: 'no-store' });
+          if (gRes.ok) {
+            const gData = await gRes.json();
+            if (gData.status === 'OK' && gData.results?.length > 0) {
+              for (const r of gData.results) {
+                results.push({
+                  latitude: r.geometry.location.lat,
+                  longitude: r.geometry.location.lng,
+                  displayName: r.formatted_address,
+                  street: null,
+                  district: null,
+                  city: null,
+                });
+              }
+              return NextResponse.json({ results });
+            }
+          }
+        } catch (gErr) {
+          console.warn('Google Maps API geocode error:', gErr);
+        }
+      }
+
+      const variants = generateVietnameseAddressVariants(trimmedQuery);
 
       // A. Thử lần lượt các biến thể qua ArcGIS World Geocoding (nhận diện cực tốt số nhà & ngõ ngách VN)
       for (const variant of variants) {
@@ -138,6 +169,22 @@ export async function GET(request: Request) {
 
     // 2. Reverse Geocoding: Lấy tên địa chỉ từ tọa độ GPS
     if (lat && lon) {
+      // Ưu tiên 0: Google Maps Reverse Geocoding nếu có API key
+      if (googleApiKey) {
+        try {
+          const gRevUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${googleApiKey}&language=vi&region=vn`;
+          const gRevRes = await fetch(gRevUrl, { cache: 'no-store' });
+          if (gRevRes.ok) {
+            const gRevData = await gRevRes.json();
+            if (gRevData.status === 'OK' && gRevData.results?.[0]?.formatted_address) {
+              return NextResponse.json({ address: gRevData.results[0].formatted_address });
+            }
+          }
+        } catch (gRevErr) {
+          console.warn('Google Maps API reverse geocode error:', gRevErr);
+        }
+      }
+
       // Ưu tiên 1: ArcGIS reverse geocoding để lấy số nhà và tên đường chi tiết
       try {
         const arcRevUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?f=json&location=${lon},${lat}`;
