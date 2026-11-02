@@ -15,6 +15,7 @@ import {
   Save,
   QrCode,
   ArrowLeft,
+  LogOut,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -150,6 +151,12 @@ export default function EditProfilePage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleLogout() {
+    if (!confirm('Bạn có chắc chắn muốn đăng xuất tài khoản?')) return;
+    await supabase.auth.signOut();
+    window.location.href = '/login';
   }
 
   const cleanAccount = cleanAccountNumber(bankAccountNo);
@@ -397,6 +404,17 @@ export default function EditProfilePage() {
           <Save className="w-4 h-4" />
           <span>{saving ? 'Đang lưu...' : 'Lưu Thay Đổi'}</span>
         </button>
+
+        <div className="pt-2 flex justify-center">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 font-semibold py-2 px-3 rounded-lg hover:bg-red-50 transition active:scale-95 cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Đăng xuất tài khoản</span>
+          </button>
+        </div>
       </form>
     </div>
   );

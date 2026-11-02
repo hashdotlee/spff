@@ -24,6 +24,7 @@ import {
   ExternalLink,
   User,
   AlertCircle,
+  LogOut,
 } from 'lucide-react';
 
 function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
@@ -141,6 +142,12 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
     loadData();
   }, [profileId, supabase]);
 
+  async function handleLogout() {
+    if (!confirm('Bạn có chắc chắn muốn đăng xuất tài khoản khỏi thiết bị này?')) return;
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  }
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
@@ -180,13 +187,24 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
           <span>Trang chủ</span>
         </Link>
         {isOwner && (
-          <Link
-            href="/profile/edit"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition active:scale-95"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Sửa hồ sơ & VietQR</span>
-          </Link>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <Link
+              href="/profile/edit"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition active:scale-95"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Sửa hồ sơ</span>
+            </Link>
+
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold rounded-xl transition active:scale-95 border border-red-200"
+              title="Đăng xuất tài khoản"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Đăng xuất</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -608,6 +626,18 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
               </p>
             </div>
           )}
+        </div>
+      )}
+
+      {isOwner && (
+        <div className="pt-2 pb-6 flex justify-center">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition active:scale-95 border border-red-200 shadow-2xs"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Đăng xuất tài khoản khỏi thiết bị</span>
+          </button>
         </div>
       )}
 

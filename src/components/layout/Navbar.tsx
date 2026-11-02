@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { MapPin, User, LogOut, ShieldAlert, Award, Siren } from 'lucide-react';
+import { MapPin, User, ShieldAlert, Award, Siren } from 'lucide-react';
 import type { Profile } from '@/types/database';
 
 export function Navbar() {
@@ -124,11 +124,6 @@ export function Navbar() {
     };
   }, []);
 
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    window.location.href = '/login';
-  }
-
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs pt-[env(safe-area-inset-top,0px)]">
       <div className="max-w-3xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
@@ -192,14 +187,6 @@ export function Navbar() {
                   profile.full_name?.[0]?.toUpperCase() || <User className="w-4 h-4" />
                 )}
               </Link>
-
-              <button
-                onClick={handleLogout}
-                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition active:scale-95"
-                title="Đăng xuất"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
             </div>
           ) : (
             <div className="flex items-center gap-1.5 sm:gap-2">
