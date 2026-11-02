@@ -70,16 +70,17 @@ export default function NewWarehousePage() {
         return;
       }
 
-      // 1. Upload ảnh nếu có chụp
+      // 1. Upload ảnh nếu có chụp (tự động nén trước khi gửi)
       let uploadedImageUrl: string | null = null;
       if (imageBlob) {
         try {
-          setUploadStatusText('Đang tải ảnh cổng kho lên...');
+          setUploadStatusText('Đang nén và tải ảnh cổng kho lên (tiết kiệm 4G)...');
           const fileName = `${user.id}_${Date.now()}.jpg`;
           uploadedImageUrl = await uploadImageToSupabase(supabase, imageBlob, {
             primaryBucket: 'warehouse-images',
             fileName,
             fallbackBucket: 'avatars',
+            compress: true,
           });
         } catch (imgErr: any) {
           console.warn('Không thể upload ảnh kho:', imgErr?.message);

@@ -153,7 +153,7 @@ export default function NewIncidentPage() {
     }
 
     setLoading(true);
-    setStatusText('Đang tải ảnh hiện trường lên...');
+    setStatusText('Đang nén và tải ảnh hiện trường lên (tiết kiệm 4G)...');
 
     try {
       const {
@@ -165,12 +165,13 @@ export default function NewIncidentPage() {
         return;
       }
 
-      // 1. Upload ảnh hiện trường (primary: incident-photos, fallback: avatars)
+      // 1. Upload ảnh hiện trường (tự động nén trước khi gửi, primary: incident-photos, fallback: avatars)
       const fileName = `${user.id}_${Date.now()}.jpg`;
       const uploadedPhotoUrl = await uploadImageToSupabase(supabase, photoBlob, {
         primaryBucket: 'incident-photos',
         fileName,
         fallbackBucket: 'avatars',
+        compress: true,
       });
 
       setStatusText('Đang phát tín hiệu SOS tới đồng nghiệp...');
