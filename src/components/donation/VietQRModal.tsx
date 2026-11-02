@@ -140,12 +140,22 @@ export function VietQRModal({
                   </div>
                 )}
                 {qrError ? (
-                  <div className="p-4 text-center text-red-600 text-xs">
-                    <AlertCircle className="w-6 h-6 mx-auto mb-1 text-red-500" />
-                    <p className="font-semibold">Không thể tải ảnh mã QR</p>
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      Bạn có thể copy số tài khoản bên dưới để chuyển khoản thủ công.
+                  <div className="p-4 text-center text-red-600 text-xs space-y-2">
+                    <AlertCircle className="w-6 h-6 mx-auto text-red-500" />
+                    <p className="font-semibold">Chưa tải được ảnh mã QR</p>
+                    <p className="text-[11px] text-slate-500">
+                      Bạn có thể bấm nút &quot;Sao chép số tài khoản&quot; bên dưới để mở app ngân hàng chuyển khoản nhanh.
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQrError(false);
+                        setQrLoading(true);
+                      }}
+                      className="px-3 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition cursor-pointer"
+                    >
+                      Thử tải lại mã QR
+                    </button>
                   </div>
                 ) : (
                   /* eslint-disable-next-line @next/next/no-img-element */
