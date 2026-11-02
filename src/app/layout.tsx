@@ -4,6 +4,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
 import { ProvinceProvider } from '@/lib/contexts/ProvinceContext';
 import { ProvincePickerModal } from '@/components/common/ProvincePickerModal';
+import { PWAInstallPrompt } from '@/components/common/PWAInstallPrompt';
 import { Suspense } from 'react';
 
 export const metadata: Metadata = {
@@ -46,6 +47,7 @@ export default function RootLayout({
             <BottomNavigation />
           </Suspense>
           <ProvincePickerModal />
+          <PWAInstallPrompt />
         </ProvinceProvider>
       </body>
     </html>
