@@ -156,6 +156,31 @@ export default function NewWarehousePage() {
     e.target.value = '';
   }
 
+  function resetForm() {
+    if (previewUrl) {
+      try {
+        URL.revokeObjectURL(previewUrl);
+      } catch (e) {
+        // ignore
+      }
+    }
+    setPhotoBlob(null);
+    setPreviewUrl(null);
+    setAudioBlob(null);
+    setAudioDuration(0);
+    setName('');
+    setExactAddress('');
+    setResolvedAddressCoords(null);
+    setIsGeocoding(false);
+    setAutoReverseAddress(null);
+    setCategory('warehouse');
+    setIsPrivate(false);
+    setLoading(false);
+    setStatusText(null);
+    setErrorMsg(null);
+    autoTriggeredRef.current = false;
+  }
+
   function handleRetakePhoto() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
@@ -321,8 +346,13 @@ export default function NewWarehousePage() {
         console.warn('Lỗi cập nhật điểm cống hiến:', repErr);
       }
 
+      const createdWhId = whData.id;
+
+      // Reset form hoàn toàn để lần ghim sau bắt đầu lại từ đầu, không bị dính state cũ hay loading
+      resetForm();
+
       // Hoàn tất -> chuyển thẳng đến trang chi tiết kho vừa tạo
-      router.push(`/warehouse/${whData.id}`);
+      router.push(`/warehouse/${createdWhId}`);
     } catch (err: any) {
       console.error('Lỗi ghim địa chỉ:', err);
       setErrorMsg(err?.message || 'Đã có lỗi xảy ra. Vui lòng thử lại.');

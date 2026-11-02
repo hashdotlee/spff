@@ -156,6 +156,30 @@ export default function NewIncidentPage() {
     e.target.value = '';
   }
 
+  function resetForm() {
+    if (previewUrl) {
+      try {
+        URL.revokeObjectURL(previewUrl);
+      } catch (e) {
+        // ignore
+      }
+    }
+    setPhotoBlob(null);
+    setPreviewUrl(null);
+    setIncidentType('broken_vehicle');
+    setAudioBlob(null);
+    setAudioDuration(0);
+    setPhone('');
+    setNoteText('');
+    setExactAddress('');
+    setResolvedCoords(null);
+    setIsGeocoding(false);
+    setAutoReverseAddress(null);
+    setLoading(false);
+    setStatusText(null);
+    setErrorMsg(null);
+  }
+
   function handleRetakePhoto() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
@@ -328,7 +352,9 @@ export default function NewIncidentPage() {
       }
 
       if (data) {
-        router.push(`/incidents/${data.id}`);
+        const createdIncidentId = data.id;
+        resetForm();
+        router.push(`/incidents/${createdIncidentId}`);
       }
     } catch (err: any) {
       console.error('Lỗi phát tín hiệu SOS:', err);
