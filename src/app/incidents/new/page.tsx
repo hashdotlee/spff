@@ -282,41 +282,50 @@ export default function NewIncidentPage() {
       />
 
       {/* Top Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2 min-w-0">
           <Link
             href="/incidents"
-            className="p-2 -ml-1 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition active:scale-95"
+            className="p-2 -ml-1 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition active:scale-95 shrink-0 mt-0.5"
+            title="Quay lại danh sách sự cố"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight flex items-center gap-1.5">
-              <span className="p-1 bg-red-600 text-white rounded-lg">
+              <span className="p-1 bg-red-600 text-white rounded-lg shrink-0">
                 <Siren className="w-4 h-4 animate-pulse" />
               </span>
-              <span>Cứu Hộ Khẩn Cấp (SOS)</span>
+              <span className="truncate">Cứu Hộ Khẩn Cấp (SOS)</span>
             </h1>
-            <span className="text-[11px] text-slate-500 block -mt-0.5">
-              Phát tín hiệu cứu trợ anh em đồng nghiệp
-            </span>
+
+            {/* GPS Indicator & Subtitle below title */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+              <div
+                className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                  gpsReady
+                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                    : 'text-amber-700 bg-amber-50 border-amber-200'
+                }`}
+              >
+                <MapPin className={`w-3 h-3 ${gpsReady ? 'text-emerald-600' : 'text-amber-600 animate-pulse'}`} />
+                <span>{gpsReady ? 'GPS Sẵn sàng' : 'Lấy GPS...'}</span>
+              </div>
+              <span className="text-[11px] text-slate-500">
+                Phát tín hiệu cứu trợ anh em đồng nghiệp
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* View Feed Link & GPS Indicator */}
-        <div className="flex items-center gap-1.5">
-          <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-xl border border-emerald-200">
-            <MapPin className="w-3 h-3 text-emerald-600" />
-            <span>{gpsReady ? 'GPS Sẵn sàng' : 'Lấy GPS...'}</span>
-          </div>
-          <Link
-            href="/incidents"
-            className="text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-xl border border-red-200 transition active:scale-95 flex items-center gap-1 shrink-0"
-          >
-            <ListOrdered className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline">DS Sự Cố</span>
-          </Link>
-        </div>
+        {/* View Feed Link */}
+        <Link
+          href="/incidents"
+          className="text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-xl border border-red-200 transition active:scale-95 flex items-center gap-1 shrink-0 mt-0.5"
+        >
+          <ListOrdered className="w-3.5 h-3.5" />
+          <span className="hidden xs:inline">DS Sự Cố</span>
+        </Link>
       </div>
 
       {errorMsg && (
