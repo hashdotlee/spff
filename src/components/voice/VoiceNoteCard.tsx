@@ -378,8 +378,14 @@ export function VoiceNoteCard({
 
       {/* Report Modal */}
       {showReportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-sm rounded-2xl p-4 sm:p-5 shadow-2xl border border-slate-200">
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs"
+          onClick={() => setShowReportModal(false)}
+        >
+          <div
+            className="bg-white w-full max-w-sm rounded-2xl p-4 sm:p-5 shadow-2xl border border-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center gap-2 text-red-600 mb-3">
               <AlertTriangle className="w-5 h-5 shrink-0" />
               <h4 className="font-bold text-sm">Báo cáo chỉ dẫn không đúng</h4>

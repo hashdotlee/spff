@@ -43,6 +43,16 @@ export function OfferHelpModal({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen || !incident) return null;
 
   const quickMessages = [
@@ -81,7 +91,10 @@ export function OfferHelpModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+    <div
+      className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
+      onClick={onClose}
+    >
       <div
         className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}

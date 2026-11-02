@@ -142,10 +142,10 @@ export default function LocationPicker({
 
   return (
     <div className="space-y-2">
-      <div className="relative h-64 sm:h-72 w-full rounded-2xl overflow-hidden border border-slate-300 shadow-inner">
+      <div className="relative isolate z-0 h-64 sm:h-72 w-full rounded-2xl overflow-hidden border border-slate-300 shadow-inner">
         <div
           ref={mapContainerRef}
-          className="h-full w-full"
+          className="h-full w-full isolate z-0"
           style={{ minHeight: '256px', width: '100%', height: '100%' }}
         />
 
@@ -153,7 +153,7 @@ export default function LocationPicker({
           type="button"
           onClick={handleGetCurrentLocation}
           disabled={locating}
-          className="absolute top-3 right-3 z-[500] bg-white text-slate-800 px-2.5 sm:px-3 py-1.5 rounded-xl shadow-md border border-slate-200 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-50 transition active:scale-95"
+          className="absolute top-3 right-3 z-10 bg-white text-slate-800 px-2.5 sm:px-3 py-1.5 rounded-xl shadow-md border border-slate-200 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-50 transition active:scale-95"
         >
           <LocateFixed className={`w-4 h-4 text-orange-600 ${locating ? 'animate-spin' : ''}`} />
           <span>{locating ? 'Đang tìm...' : 'Vị trí GPS của tôi'}</span>

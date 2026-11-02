@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+/* Ensure Leaflet map does not create rogue stacking contexts that overflow modals, popups or fixed navigation */
+.leaflet-container {
+  isolation: isolate;
+  z-index: 0;
+}
+
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;

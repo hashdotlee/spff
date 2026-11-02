@@ -413,8 +413,14 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
 
       {/* Report Warehouse Modal */}
       {showReportWarehouse && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-sm rounded-2xl p-4 sm:p-5 shadow-2xl border border-slate-200">
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs"
+          onClick={() => setShowReportWarehouse(false)}
+        >
+          <div
+            className="bg-white w-full max-w-sm rounded-2xl p-4 sm:p-5 shadow-2xl border border-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center gap-2 text-red-600 mb-3">
               <AlertTriangle className="w-5 h-5 shrink-0" />
               <h4 className="font-bold text-sm">Báo cáo kho không đúng</h4>
@@ -484,7 +490,7 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
       {/* Fullscreen Photo Lightbox Modal */}
       {zoomedPhoto && (
         <div
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
+          className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
           onClick={() => setZoomedPhoto(null)}
         >
           <div className="relative max-w-4xl w-full max-h-[90vh] flex flex-col items-center">

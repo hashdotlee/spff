@@ -698,7 +698,7 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
       {/* Fullscreen Photo Lightbox */}
       {showPhotoModal && (
         <div
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
+          className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
           onClick={() => setShowPhotoModal(false)}
         >
           <div className="relative max-w-3xl w-full max-h-[90vh] flex flex-col items-center">

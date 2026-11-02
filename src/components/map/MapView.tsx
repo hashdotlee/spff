@@ -307,7 +307,7 @@ export default function MapView({
   return (
     <div
       ref={mapContainerRef}
-      className={className}
+      className={`isolate z-0 ${className}`}
       style={{ minHeight: '320px', width: '100%' }}
     />
   );
