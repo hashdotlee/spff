@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { MapPin, Plus, AlertCircle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { PhotoCapture } from '@/components/common/PhotoCapture';
+import { uploadImageToSupabase } from '@/lib/utils/imageUpload';
 
 const LocationPicker = dynamic(() => import('@/components/map/LocationPicker'), {
   ssr: false,
@@ -22,9 +24,11 @@ export default function NewWarehousePage() {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [description, setDescription] = useState('');
+  const [imageBlob, setImageBlob] = useState<Blob | null>(null);
   const [lat, setLat] = useState(21.0285);
   const [lng, setLng] = useState(105.8542);
   const [loading, setLoading] = useState(false);
+  const [uploadStatusText, setUploadStatusText] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const supabase = createClient();
@@ -54,6 +58,7 @@ export default function NewWarehousePage() {
     e.preventDefault();
     setErrorMsg(null);
     setLoading(true);
+    setUploadStatusText('Đang kiểm tra thông tin...');
 
     try {
       const {
@@ -65,19 +70,57 @@ export default function NewWarehousePage() {
         return;
       }
 
-      const { data, error } = await supabase
+      // 1. Upload ảnh nếu có chụp
+      let uploadedImageUrl: string | null = null;
+      if (imageBlob) {
+        try {
+          setUploadStatusText('Đang tải ảnh cổng kho lên...');
+          const fileName = `${user.id}_${Date.now()}.jpg`;
+          uploadedImageUrl = await uploadImageToSupabase(supabase, imageBlob, {
+            primaryBucket: 'warehouse-images',
+            fileName,
+            fallbackBucket: 'avatars',
+          });
+        } catch (imgErr: any) {
+          console.warn('Không thể upload ảnh kho:', imgErr?.message);
+          // Không chặn tạo kho nếu upload ảnh bị lỗi
+        }
+      }
+
+      setUploadStatusText('Đang ghim kho lên bản đồ...');
+
+      // 2. Thử insert có image_url
+      const insertPayload: any = {
+        name: name.trim(),
+        address: address.trim() || null,
+        latitude: lat,
+        longitude: lng,
+        description: description.trim() || null,
+        created_by: user.id,
+        status: 'active',
+      };
+
+      if (uploadedImageUrl) {
+        insertPayload.image_url = uploadedImageUrl;
+      }
+
+      let { data, error } = await supabase
         .from('warehouses')
-        .insert({
-          name: name.trim(),
-          address: address.trim() || null,
-          latitude: lat,
-          longitude: lng,
-          description: description.trim() || null,
-          created_by: user.id,
-          status: 'active',
-        })
+        .insert(insertPayload)
         .select()
         .single();
+
+      // Nếu cột image_url chưa có trong DB (lỗi 42703), fallback insert không có image_url
+      if (error && (error.code === '42703' || error.message.includes('image_url'))) {
+        delete insertPayload.image_url;
+        const retryResult = await supabase
+          .from('warehouses')
+          .insert(insertPayload)
+          .select()
+          .single();
+        data = retryResult.data;
+        error = retryResult.error;
+      }
 
       if (error) {
         setErrorMsg(error.message);
@@ -91,6 +134,7 @@ export default function NewWarehousePage() {
       setErrorMsg('Đã xảy ra lỗi khi tạo kho mới. Vui lòng thử lại.');
     } finally {
       setLoading(false);
+      setUploadStatusText(null);
     }
   }
 
@@ -171,13 +215,26 @@ export default function NewWarehousePage() {
           />
         </div>
 
+        {/* Chụp ảnh cổng kho / hiện trường */}
+        <div className="pt-1 border-t border-slate-100">
+          <PhotoCapture
+            label="Chụp ảnh cổng kho / Biển hiệu bến bãi"
+            helperText="Khuyên dùng: Bác tài chụp ảnh cổng bến bãi hoặc cột mốc dễ nhìn để anh em đồng nghiệp đến nơi nhận diện ngay."
+            required={false}
+            onPhotoSelected={(blob) => setImageBlob(blob)}
+          />
+        </div>
+
         <button
           type="submit"
           disabled={loading}
-          className="w-full min-h-[48px] py-3.5 px-4 bg-orange-600 hover:bg-orange-700 active:scale-[0.99] text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
+          className="w-full min-h-[48px] py-3.5 px-4 bg-orange-600 hover:bg-orange-700 active:scale-[0.99] text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 text-sm cursor-pointer"
         >
           {loading ? (
-            <span>Đang ghim kho lên bản đồ...</span>
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <span>{uploadStatusText || 'Đang ghim kho lên bản đồ...'}</span>
+            </div>
           ) : (
             <>
               <Plus className="w-5 h-5" />

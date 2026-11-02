@@ -22,6 +22,9 @@ import {
   Trash2,
   ShieldAlert,
   Heart,
+  Camera,
+  Maximize2,
+  X,
 } from 'lucide-react';
 
 function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
@@ -38,6 +41,7 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
   const [reportReason, setReportReason] = useState('');
   const [reportSuccess, setReportSuccess] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -275,6 +279,43 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
           </div>
         )}
 
+        {/* Warehouse Gate Photo (Ảnh cổng kho do tài xế chụp) */}
+        {warehouse.image_url && (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs text-slate-700 font-bold">
+              <span className="flex items-center gap-1.5 text-orange-600">
+                <Camera className="w-3.5 h-3.5" />
+                <span>Ảnh thực tế cổng kho</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setZoomedPhoto(warehouse.image_url || null)}
+                className="text-[11px] text-slate-500 hover:text-orange-600 font-semibold flex items-center gap-1 active:scale-95 transition"
+              >
+                <Maximize2 className="w-3 h-3" />
+                <span>Xem ảnh lớn</span>
+              </button>
+            </div>
+            <div
+              onClick={() => setZoomedPhoto(warehouse.image_url || null)}
+              className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 cursor-pointer group shadow-xs"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={warehouse.image_url}
+                alt={warehouse.name}
+                className="w-full h-48 sm:h-64 object-cover group-hover:scale-102 transition duration-300"
+              />
+              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                <span className="px-3 py-1.5 bg-black/60 text-white text-xs font-bold rounded-lg backdrop-blur-xs flex items-center gap-1.5">
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Phóng to</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Pinner Info & Thank You Button */}
         {warehouse.creator ? (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-3.5 bg-gradient-to-r from-amber-50/70 via-orange-50/40 to-amber-50/70 rounded-xl border border-amber-200/70">
@@ -449,6 +490,30 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
           }
           transferMessage="Cam on bac tai ghim kho"
         />
+      )}
+
+      {/* Fullscreen Photo Lightbox Modal */}
+      {zoomedPhoto && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
+          onClick={() => setZoomedPhoto(null)}
+        >
+          <div className="relative max-w-4xl w-full max-h-[90vh] flex flex-col items-center">
+            <button
+              onClick={() => setZoomedPhoto(null)}
+              className="absolute -top-12 right-0 p-2 text-white hover:text-slate-300 rounded-full bg-white/10 hover:bg-white/20 transition active:scale-95"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={zoomedPhoto}
+              alt="Ảnh phóng to"
+              className="max-h-[85vh] w-auto max-w-full rounded-2xl object-contain shadow-2xl border border-white/10"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

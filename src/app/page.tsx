@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import type { Warehouse } from '@/types/database';
-import { calculateHaversineDistance } from '@/lib/utils/distance';
+import type { Warehouse, Incident } from '@/types/database';
+import { calculateHaversineDistance, formatDistance } from '@/lib/utils/distance';
 import { NearestList } from '@/components/warehouse/NearestList';
 import {
   MapPin,
@@ -13,6 +13,8 @@ import {
   LocateFixed,
   AlertCircle,
   Search,
+  Siren,
+  ChevronRight,
 } from 'lucide-react';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), {
@@ -31,7 +33,9 @@ export default function HomePage() {
     lng: 105.8542,
   });
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
+  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [loading, setLoading] = useState(true);
   const [locating, setLocating] = useState(false);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -98,12 +102,45 @@ export default function HomePage() {
     }
   }
 
+  // 3. Fetch active incidents (sự cố đang cần hỗ trợ)
+  async function loadIncidents() {
+    try {
+      const { data, error } = await supabase
+        .from('incidents')
+        .select(`*, user:profiles(*)`)
+        .in('status', ['open', 'helping'])
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (!error && data) {
+        setIncidents(data);
+      }
+    } catch (err) {
+      console.warn('Lỗi loadIncidents trang chủ:', err);
+    }
+  }
+
   useEffect(() => {
     requestLocation();
     loadWarehouses();
+    loadIncidents();
   }, []);
 
-  // 3. Compute distances using Haversine formula and sort
+  // 4. Compute distances using Haversine formula and sort
+  const computedIncidents = incidents.map((inc) => {
+    let distance_km = 0;
+    if (userLocation) {
+      distance_km = calculateHaversineDistance(
+        userLocation.lat,
+        userLocation.lng,
+        inc.latitude,
+        inc.longitude
+      );
+    }
+    return { ...inc, distance_km };
+  });
+
+  const nearbyIncidents = computedIncidents.filter((inc) => (inc.distance_km || 0) <= 25);
   const sortedWarehouses = warehouses
     .map((wh) => {
       let distance_km = 0;
@@ -167,13 +204,42 @@ export default function HomePage() {
         </div>
       )}
 
+      {/* Emergency SOS Banner if active incidents are nearby */}
+      {nearbyIncidents.length > 0 && (
+        <Link
+          href="/incidents"
+          className="p-3 sm:p-3.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-2xl text-white shadow-md shadow-red-600/20 flex items-center justify-between gap-2 group transition active:scale-[0.99]"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <Siren className="w-4 h-4 text-white animate-pulse" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-xs font-black block truncate">
+                🚨 Có {nearbyIncidents.length} sự cố cần cứu hộ gần bạn!
+              </span>
+              <span className="text-[10px] text-white/80 block truncate">
+                {nearbyIncidents[0].title} ({formatDistance(nearbyIncidents[0].distance_km || 0)})
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 text-[11px] font-bold bg-white text-red-700 px-2.5 py-1 rounded-xl shrink-0 group-hover:bg-slate-100">
+            <span>Ứng cứu</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </div>
+        </Link>
+      )}
+
       {/* Leaflet OpenStreetMap */}
       <div className="relative">
         <MapView
           userLocation={userLocation}
           warehouses={sortedWarehouses}
+          incidents={computedIncidents}
           selectedWarehouseId={selectedWarehouse?.id}
+          selectedIncidentId={selectedIncident?.id}
           onSelectWarehouse={(wh) => setSelectedWarehouse(wh)}
+          onSelectIncident={(inc) => setSelectedIncident(inc)}
           className="h-64 sm:h-80 w-full rounded-2xl overflow-hidden shadow-xs border border-slate-200"
         />
 

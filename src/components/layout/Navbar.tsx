@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { MapPin, User, LogOut, ShieldAlert, Award } from 'lucide-react';
+import { MapPin, User, LogOut, ShieldAlert, Award, Siren } from 'lucide-react';
 import type { Profile } from '@/types/database';
 
 export function Navbar() {
@@ -143,6 +143,16 @@ export function Navbar() {
         </Link>
 
         <div className="flex items-center gap-1.5 sm:gap-2.5">
+          {/* Quick SOS Link */}
+          <Link
+            href="/incidents"
+            className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-full text-xs font-black transition flex items-center gap-1 active:scale-95 shrink-0"
+            title="Cứu hộ SOS khẩn cấp"
+          >
+            <Siren className="w-3.5 h-3.5 text-red-600 animate-pulse" />
+            <span>SOS</span>
+          </Link>
+
           {loading ? (
             <div className="w-8 h-8 rounded-full bg-slate-100 animate-pulse" />
           ) : profile ? (

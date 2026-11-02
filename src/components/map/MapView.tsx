@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import type { Warehouse } from '@/types/database';
+import type { Warehouse, Incident } from '@/types/database';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
@@ -9,16 +9,22 @@ import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
 interface MapViewProps {
   userLocation: { lat: number; lng: number } | null;
   warehouses: Warehouse[];
+  incidents?: Incident[];
   selectedWarehouseId?: string | null;
+  selectedIncidentId?: string | null;
   onSelectWarehouse?: (warehouse: Warehouse) => void;
+  onSelectIncident?: (incident: Incident) => void;
   className?: string;
 }
 
 export default function MapView({
   userLocation,
   warehouses,
+  incidents = [],
   selectedWarehouseId,
+  selectedIncidentId,
   onSelectWarehouse,
+  onSelectIncident,
   className = 'h-80 w-full rounded-2xl overflow-hidden shadow-inner',
 }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -180,6 +186,11 @@ export default function MapView({
 
       marker.bindPopup(`
         <div class="p-1 max-w-[210px]">
+          ${
+            wh.image_url
+              ? `<img src="${wh.image_url}" alt="${wh.name}" class="w-full h-20 object-cover rounded-lg mb-1.5 border border-slate-200" />`
+              : ''
+          }
           <strong class="text-sm font-bold text-slate-900 block truncate">${wh.name}</strong>
           ${
             wh.distance_km !== undefined
@@ -215,7 +226,83 @@ export default function MapView({
         }
       });
     });
-  }, [userLocation, warehouses, selectedWarehouseId, onSelectWarehouse]);
+
+    // 3. SOS Incident Markers (Flashing Red Pin 🚨)
+    incidents.forEach((inc) => {
+      if (
+        typeof inc.latitude !== 'number' ||
+        typeof inc.longitude !== 'number' ||
+        isNaN(inc.latitude) ||
+        isNaN(inc.longitude)
+      ) {
+        return;
+      }
+
+      const isSelected = selectedIncidentId === inc.id;
+      const navUrl = getGoogleMapsNavigationUrl(inc.latitude, inc.longitude);
+
+      const sosIcon = L.divIcon({
+        className: 'custom-sos-pin-container',
+        html: `
+          <div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
+            <div style="position: absolute; inset: -4px; border-radius: 50%; background: rgba(239, 68, 68, 0.4); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+            <div style="background-color: #dc2626; width: 34px; height: 34px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; border: 2.5px solid #ffffff; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.6); ${
+              isSelected ? 'scale: 1.25;' : ''
+            }">
+              <div style="transform: rotate(45deg); font-size: 15px; line-height: 1;">🚨</div>
+            </div>
+          </div>
+        `,
+        iconSize: [36, 36],
+        iconAnchor: [18, 36],
+        popupAnchor: [0, -36],
+      });
+
+      const marker = L.marker([inc.latitude, inc.longitude], { icon: sosIcon }).addTo(
+        markersLayer
+      );
+
+      marker.bindPopup(`
+        <div class="p-1 max-w-[220px]">
+          ${
+            inc.photo_url
+              ? `<img src="${inc.photo_url}" alt="${inc.title}" class="w-full h-24 object-cover rounded-lg mb-1.5 border border-red-200" />`
+              : ''
+          }
+          <div class="flex items-center gap-1">
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-black bg-red-600 text-white uppercase">Cứu hộ SOS</span>
+            ${
+              inc.distance_km !== undefined
+                ? `<span class="text-[11px] font-bold text-red-600">Cách ${
+                    inc.distance_km < 1
+                      ? Math.round(inc.distance_km * 1000) + 'm'
+                      : inc.distance_km.toFixed(1) + 'km'
+                  }</span>`
+                : ''
+            }
+          </div>
+          <strong class="text-xs font-black text-slate-900 block mt-1 line-clamp-1">${inc.title}</strong>
+          <p class="text-[11px] text-slate-600 line-clamp-2 mt-0.5">${inc.description}</p>
+          <div class="mt-2.5 flex items-center gap-1.5">
+            <a href="/incidents/${inc.id}" 
+               class="px-2.5 py-1.5 bg-red-600 text-white rounded-lg text-[11px] font-bold inline-flex items-center justify-center hover:bg-red-700 active:scale-95 transition">
+               Ứng cứu ngay 🤝
+            </a>
+            <a href="${navUrl}" target="_blank" rel="noopener noreferrer" 
+               class="px-2.5 py-1.5 bg-blue-600 text-white rounded-lg text-[11px] font-bold inline-flex items-center justify-center hover:bg-blue-700 active:scale-95 transition">
+               Chỉ đường 🚀
+            </a>
+          </div>
+        </div>
+      `);
+
+      marker.on('click', () => {
+        if (onSelectIncident) {
+          onSelectIncident(inc);
+        }
+      });
+    });
+  }, [userLocation, warehouses, incidents, selectedWarehouseId, selectedIncidentId, onSelectWarehouse, onSelectIncident]);
 
   return (
     <div

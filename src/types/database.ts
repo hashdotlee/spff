@@ -2,6 +2,16 @@ export type UserRole = 'user' | 'admin';
 export type WarehouseStatus = 'active' | 'reported' | 'hidden';
 export type VoiceNoteStatus = 'active' | 'hidden';
 export type ReportStatus = 'pending' | 'resolved' | 'dismissed';
+export type IncidentType =
+  | 'broken_vehicle' // Hỏng xe
+  | 'out_of_gas'     // Hết xăng / dầu
+  | 'flat_tire'      // Thủng lốp / nổ lốp
+  | 'battery_dead'   // Hết ắc quy / chết máy
+  | 'accident'       // Va chạm / sự cố đường
+  | 'other';         // Sự cố khác
+
+export type IncidentStatus = 'open' | 'helping' | 'resolved' | 'cancelled';
+export type HelperStatus = 'offered' | 'accepted' | 'completed' | 'cancelled';
 
 export interface Profile {
   id: string;
@@ -26,6 +36,7 @@ export interface Warehouse {
   latitude: number;
   longitude: number;
   description: string | null;
+  image_url?: string | null;
   created_by: string | null;
   status: WarehouseStatus;
   created_at: string;
@@ -89,4 +100,38 @@ export interface UserBadge {
   badge_id: string;
   earned_at: string;
   badge?: Badge;
+}
+
+export interface Incident {
+  id: string;
+  user_id: string;
+  title: string;
+  incident_type: IncidentType;
+  description: string;
+  latitude: number;
+  longitude: number;
+  address: string | null;
+  photo_url: string; // Bắt buộc ảnh hiện trường để chứng minh
+  phone: string;
+  status: IncidentStatus;
+  helper_count: number;
+  created_at: string;
+  updated_at: string;
+  // Computed / Joined fields
+  distance_km?: number;
+  user?: Profile | null;
+  helpers?: IncidentHelper[];
+  current_user_helper?: IncidentHelper | null;
+}
+
+export interface IncidentHelper {
+  id: string;
+  incident_id: string;
+  helper_id: string;
+  status: HelperStatus;
+  message: string | null;
+  eta_minutes: number | null;
+  created_at: string;
+  // Joined fields
+  helper?: Profile | null;
 }

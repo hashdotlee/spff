@@ -6,7 +6,7 @@ import type { Warehouse } from '@/types/database';
 import { formatDistance } from '@/lib/utils/distance';
 import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
 import { VietQRModal } from '@/components/donation/VietQRModal';
-import { Navigation2, Volume2, MapPin, ChevronRight, Heart } from 'lucide-react';
+import { Navigation2, Volume2, MapPin, ChevronRight, Heart, Camera } from 'lucide-react';
 
 interface NearestListProps {
   warehouses: Warehouse[];
@@ -88,6 +88,13 @@ export function NearestList({
                       {wh.distance_km !== undefined && (
                         <span className="font-extrabold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200/80 text-[11px] sm:text-xs">
                           {formatDistance(wh.distance_km)}
+                        </span>
+                      )}
+
+                      {wh.image_url && (
+                        <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded text-[11px] font-bold border border-emerald-200 inline-flex items-center gap-1">
+                          <Camera className="w-3 h-3 text-emerald-600" />
+                          <span>Ảnh thực tế</span>
                         </span>
                       )}
 
