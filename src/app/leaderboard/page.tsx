@@ -20,6 +20,8 @@ export default function LeaderboardPage() {
         const { data } = await supabase
           .from('profiles')
           .select('*')
+          .eq('is_banned', false)
+          .gt('reputation_score', 0)
           .order('reputation_score', { ascending: false })
           .limit(10);
 

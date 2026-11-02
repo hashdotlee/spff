@@ -1,10 +1,13 @@
 -- ============================================================
 -- MIGRATION: Hệ thống điểm cống hiến cho Ghim Định Vị & Voice Note
 -- Điểm cống hiến được cộng tự động:
---   +10 điểm: Cho mỗi điểm ghim bến bãi / kho hàng (warehouses)
---   +5 điểm: Cho mỗi voice chỉ dẫn đường đã đóng góp (voice_notes)
+--   +10 điểm: Cho mỗi điểm ghim bến bãi / kho hàng active (warehouses)
+--   +5 điểm: Cho mỗi voice chỉ dẫn đường đã đóng góp active (voice_notes)
 --   +5 điểm: Cho mỗi lượt upvote từ cộng đồng bác tài (voice_votes)
 --   -2 điểm: Cho mỗi lượt downvote
+-- Xóa hoặc ẩn kho/voice: Tự động trừ điểm của tài xế tương ứng.
+-- Ẩn ghim kho: Tự động ẩn toàn bộ voice chỉ dẫn thuộc kho đó.
+-- Khóa tài khoản: Điểm cống hiến về 0, loại khỏi bảng xếp hạng.
 -- ============================================================
 
 -- 1. Hàm tính toán và cập nhật điểm cống hiến tự động cho một tài xế
@@ -15,8 +18,22 @@ DECLARE
     voice_pts INT := 0;
     vote_pts INT := 0;
     total_pts INT := 0;
+    user_is_banned BOOLEAN := FALSE;
 BEGIN
     IF target_user_id IS NULL THEN
+        RETURN;
+    END IF;
+
+    -- Kiểm tra nếu tài khoản bị khóa / ban thì xóa toàn bộ điểm cống hiến (0đ)
+    SELECT COALESCE(is_banned, false) INTO user_is_banned
+    FROM public.profiles
+    WHERE id = target_user_id;
+
+    IF user_is_banned THEN
+        UPDATE public.profiles
+        SET reputation_score = 0,
+            updated_at = timezone('utc'::text, now())
+        WHERE id = target_user_id;
         RETURN;
     END IF;
 
@@ -58,12 +75,29 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 2. Trigger khi thêm / sửa / xóa điểm ghim định vị (warehouses)
+-- Khi ẩn hoặc xóa kho: tự động ẩn toàn bộ voice notes thuộc kho đó & tính lại điểm
 CREATE OR REPLACE FUNCTION public.handle_warehouse_reputation_change()
 RETURNS trigger AS $$
 BEGIN
     IF TG_OP = 'DELETE' THEN
+        -- Cascade ẩn tất cả voice notes của kho bị xóa
+        UPDATE public.voice_notes
+        SET status = 'hidden',
+            updated_at = timezone('utc'::text, now())
+        WHERE warehouse_id = OLD.id
+          AND status = 'active';
+
         PERFORM public.recalculate_user_reputation(OLD.created_by);
     ELSIF TG_OP = 'UPDATE' THEN
+        -- Khi kho bị chuyển sang hidden, tự động ẩn toàn bộ voice của kho đó
+        IF NEW.status = 'hidden' AND OLD.status IS DISTINCT FROM 'hidden' THEN
+            UPDATE public.voice_notes
+            SET status = 'hidden',
+                updated_at = timezone('utc'::text, now())
+            WHERE warehouse_id = NEW.id
+              AND status = 'active';
+        END IF;
+
         IF OLD.created_by IS DISTINCT FROM NEW.created_by OR OLD.status IS DISTINCT FROM NEW.status THEN
             PERFORM public.recalculate_user_reputation(OLD.created_by);
             PERFORM public.recalculate_user_reputation(NEW.created_by);
@@ -103,7 +137,7 @@ CREATE TRIGGER on_voice_note_reputation_changed
     AFTER INSERT OR UPDATE OR DELETE ON public.voice_notes
     FOR EACH ROW EXECUTE PROCEDURE public.handle_voice_note_reputation_change();
 
--- 4. Cập nhật Trigger Vote (voice_votes) sử dụng hàm recalculate_user_reputation
+-- 4. Trigger khi thay đổi vote (voice_votes)
 CREATE OR REPLACE FUNCTION public.handle_voice_vote_change()
 RETURNS trigger AS $$
 DECLARE
@@ -143,10 +177,39 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 DROP TRIGGER IF EXISTS on_voice_vote_changed ON public.voice_votes;
 CREATE TRIGGER on_voice_vote_changed
-  AFTER INSERT OR UPDATE OR DELETE ON public.voice_votes
-  FOR EACH ROW EXECUTE PROCEDURE public.handle_voice_vote_change();
+    AFTER INSERT OR UPDATE OR DELETE ON public.voice_votes
+    FOR EACH ROW EXECUTE PROCEDURE public.handle_voice_vote_change();
 
--- 5. Backfill: Cập nhật lại điểm cống hiến cho toàn bộ tài xế hiện có
+-- 5. Trigger khi khóa / mở khóa tài khoản (profiles.is_banned)
+CREATE OR REPLACE FUNCTION public.handle_profile_ban_change()
+RETURNS trigger AS $$
+BEGIN
+    IF OLD.is_banned IS DISTINCT FROM NEW.is_banned THEN
+        IF NEW.is_banned = true THEN
+            -- Ẩn các kho và voice của tài khoản bị khóa
+            UPDATE public.warehouses
+            SET status = 'hidden',
+                updated_at = timezone('utc'::text, now())
+            WHERE created_by = NEW.id AND status = 'active';
+
+            UPDATE public.voice_notes
+            SET status = 'hidden',
+                updated_at = timezone('utc'::text, now())
+            WHERE user_id = NEW.id AND status = 'active';
+        END IF;
+
+        PERFORM public.recalculate_user_reputation(NEW.id);
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_profile_ban_changed ON public.profiles;
+CREATE TRIGGER on_profile_ban_changed
+    AFTER UPDATE OF is_banned ON public.profiles
+    FOR EACH ROW EXECUTE PROCEDURE public.handle_profile_ban_change();
+
+-- 6. Backfill: Cập nhật lại điểm cống hiến cho toàn bộ tài xế hiện có
 DO $$
 DECLARE
     r RECORD;

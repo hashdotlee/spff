@@ -129,8 +129,22 @@ DECLARE
     voice_pts INT := 0;
     vote_pts INT := 0;
     total_pts INT := 0;
+    user_is_banned BOOLEAN := FALSE;
 BEGIN
     IF target_user_id IS NULL THEN
+        RETURN;
+    END IF;
+
+    -- Kiểm tra nếu tài khoản bị khóa / ban thì xóa toàn bộ điểm cống hiến (0đ)
+    SELECT COALESCE(is_banned, false) INTO user_is_banned
+    FROM public.profiles
+    WHERE id = target_user_id;
+
+    IF user_is_banned THEN
+        UPDATE public.profiles
+        SET reputation_score = 0,
+            updated_at = timezone('utc'::text, now())
+        WHERE id = target_user_id;
         RETURN;
     END IF;
 
@@ -170,13 +184,29 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger cho warehouses: cập nhật điểm khi ghim/xóa kho
+-- Trigger cho warehouses: cập nhật điểm khi ghim/xóa kho & cascade ẩn voice notes
 CREATE OR REPLACE FUNCTION public.handle_warehouse_reputation_change()
 RETURNS trigger AS $$
 BEGIN
     IF TG_OP = 'DELETE' THEN
+        -- Cascade ẩn tất cả voice notes của kho bị xóa
+        UPDATE public.voice_notes
+        SET status = 'hidden',
+            updated_at = timezone('utc'::text, now())
+        WHERE warehouse_id = OLD.id
+          AND status = 'active';
+
         PERFORM public.recalculate_user_reputation(OLD.created_by);
     ELSIF TG_OP = 'UPDATE' THEN
+        -- Khi kho bị chuyển sang hidden, tự động ẩn toàn bộ voice của kho đó
+        IF NEW.status = 'hidden' AND OLD.status IS DISTINCT FROM 'hidden' THEN
+            UPDATE public.voice_notes
+            SET status = 'hidden',
+                updated_at = timezone('utc'::text, now())
+            WHERE warehouse_id = NEW.id
+              AND status = 'active';
+        END IF;
+
         IF OLD.created_by IS DISTINCT FROM NEW.created_by OR OLD.status IS DISTINCT FROM NEW.status THEN
             PERFORM public.recalculate_user_reputation(OLD.created_by);
             PERFORM public.recalculate_user_reputation(NEW.created_by);
@@ -257,6 +287,35 @@ DROP TRIGGER IF EXISTS on_voice_vote_changed ON public.voice_votes;
 CREATE TRIGGER on_voice_vote_changed
   AFTER INSERT OR UPDATE OR DELETE ON public.voice_votes
   FOR EACH ROW EXECUTE PROCEDURE public.handle_voice_vote_change();
+
+-- Trigger khi khóa / mở khóa tài khoản (profiles.is_banned)
+CREATE OR REPLACE FUNCTION public.handle_profile_ban_change()
+RETURNS trigger AS $$
+BEGIN
+    IF OLD.is_banned IS DISTINCT FROM NEW.is_banned THEN
+        IF NEW.is_banned = true THEN
+            -- Ẩn các kho và voice của tài khoản bị khóa
+            UPDATE public.warehouses
+            SET status = 'hidden',
+                updated_at = timezone('utc'::text, now())
+            WHERE created_by = NEW.id AND status = 'active';
+
+            UPDATE public.voice_notes
+            SET status = 'hidden',
+                updated_at = timezone('utc'::text, now())
+            WHERE user_id = NEW.id AND status = 'active';
+        END IF;
+
+        PERFORM public.recalculate_user_reputation(NEW.id);
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_profile_ban_changed ON public.profiles;
+CREATE TRIGGER on_profile_ban_changed
+    AFTER UPDATE OF is_banned ON public.profiles
+    FOR EACH ROW EXECUTE PROCEDURE public.handle_profile_ban_change();
 
 -- 9. Row Level Security (RLS) Policies
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;

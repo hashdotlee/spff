@@ -6,7 +6,8 @@ import type { Warehouse } from '@/types/database';
 import { formatDistance } from '@/lib/utils/distance';
 import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
 import { VietQRModal } from '@/components/donation/VietQRModal';
-import { Navigation2, Volume2, MapPin, ChevronRight, Heart, Camera } from 'lucide-react';
+import { ReportWarehouseModal } from '@/components/warehouse/ReportWarehouseModal';
+import { Navigation2, Volume2, MapPin, ChevronRight, Heart, Camera, Flag } from 'lucide-react';
 
 interface NearestListProps {
   warehouses: Warehouse[];
@@ -20,6 +21,7 @@ export function NearestList({
   onSelectWarehouse,
 }: NearestListProps) {
   const [thankWh, setThankWh] = useState<Warehouse | null>(null);
+  const [reportWh, setReportWh] = useState<Warehouse | null>(null);
 
   if (warehouses.length === 0) {
     return (
@@ -72,10 +74,23 @@ export function NearestList({
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-2">
                       <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate">
                         {wh.name}
                       </h3>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setReportWh(wh);
+                        }}
+                        className="py-1 px-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition active:scale-95 shrink-0 flex items-center gap-1 text-[11px] font-semibold border border-transparent hover:border-red-200"
+                        title="Báo cáo kho sai vị trí hoặc đã dời đi"
+                      >
+                        <Flag className="w-3.5 h-3.5" />
+                        <span>Báo cáo</span>
+                      </button>
                     </div>
 
                     {wh.address && (
@@ -174,6 +189,13 @@ export function NearestList({
             </>
           }
           transferMessage="Cam on bac tai ghim kho"
+        />
+      )}
+      {reportWh && (
+        <ReportWarehouseModal
+          warehouse={reportWh}
+          isOpen={!!reportWh}
+          onClose={() => setReportWh(null)}
         />
       )}
     </div>

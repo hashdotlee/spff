@@ -10,6 +10,7 @@ import { deleteWarehouse } from '@/lib/utils/adminActions';
 import { AudioRecorder } from '@/components/voice/AudioRecorder';
 import { VoiceNoteCard } from '@/components/voice/VoiceNoteCard';
 import { VietQRModal } from '@/components/donation/VietQRModal';
+import { ReportWarehouseModal } from '@/components/warehouse/ReportWarehouseModal';
 import {
   Navigation2,
   MapPin,
@@ -17,8 +18,6 @@ import {
   ArrowLeft,
   Share2,
   Flag,
-  AlertTriangle,
-  Check,
   Trash2,
   ShieldAlert,
   Heart,
@@ -38,8 +37,6 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
   const [loading, setLoading] = useState(true);
   const [showReportWarehouse, setShowReportWarehouse] = useState(false);
   const [showPinnerQRModal, setShowPinnerQRModal] = useState(false);
-  const [reportReason, setReportReason] = useState('');
-  const [reportSuccess, setReportSuccess] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
 
@@ -140,31 +137,6 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
       navigator.clipboard.writeText(window.location.href);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
-    }
-  }
-
-  async function handleReportWarehouse(e: React.FormEvent) {
-    e.preventDefault();
-    if (!currentUserId) {
-      alert('Vui lòng đăng nhập để báo cáo vi phạm!');
-      return;
-    }
-
-    try {
-      await supabase.from('reports').insert({
-        reporter_id: currentUserId,
-        warehouse_id: warehouseId,
-        reason: reportReason.trim() || 'Kho không tồn tại hoặc sai vị trí',
-        status: 'pending',
-      });
-      setReportSuccess(true);
-      setTimeout(() => {
-        setShowReportWarehouse(false);
-        setReportSuccess(false);
-        setReportReason('');
-      }, 2200);
-    } catch (err) {
-      console.error('Error reporting warehouse:', err);
     }
   }
 
@@ -417,61 +389,12 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
       </div>
 
       {/* Report Warehouse Modal */}
-      {showReportWarehouse && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs"
-          onClick={() => setShowReportWarehouse(false)}
-        >
-          <div
-            className="bg-white w-full max-w-sm rounded-2xl p-4 sm:p-5 shadow-2xl border border-slate-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-2 text-red-600 mb-3">
-              <AlertTriangle className="w-5 h-5 shrink-0" />
-              <h4 className="font-bold text-sm">Báo cáo kho không đúng</h4>
-            </div>
+      <ReportWarehouseModal
+        warehouse={warehouse}
+        isOpen={showReportWarehouse}
+        onClose={() => setShowReportWarehouse(false)}
+      />
 
-            {reportSuccess ? (
-              <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl text-xs space-y-1">
-                <div className="flex items-center gap-2 font-bold">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Đã gửi báo cáo cho quản trị viên kiểm tra!</span>
-                </div>
-                <p className="text-[11px] text-emerald-700 pl-6">
-                  Bạn có thể theo dõi tiến độ xử lý báo cáo tại mục Hồ Sơ cá nhân.
-                </p>
-              </div>
-            ) : (
-              <form onSubmit={handleReportWarehouse} className="space-y-3">
-                <textarea
-                  required
-                  rows={3}
-                  value={reportReason}
-                  onChange={(e) => setReportReason(e.target.value)}
-                  placeholder="Lý do: Kho đã giải tỏa, sai vị trí bản đồ, trùng lặp..."
-                  className="w-full p-2.5 rounded-xl border border-slate-300 text-base sm:text-xs focus:ring-2 focus:ring-red-500 focus:outline-none"
-                />
-
-                <div className="flex gap-2 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setShowReportWarehouse(false)}
-                    className="min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 active:scale-95 transition"
-                  >
-                    Hủy
-                  </button>
-                  <button
-                    type="submit"
-                    className="min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-bold bg-red-600 text-white hover:bg-red-700 active:scale-95 transition"
-                  >
-                    Gửi báo cáo
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
       {/* Thank Pinner VietQR Modal */}
       {warehouse.creator && (
         <VietQRModal

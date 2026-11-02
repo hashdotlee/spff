@@ -152,6 +152,24 @@ export default function EditProfilePage() {
     }
   }
 
+  const cleanAccount = cleanAccountNumber(bankAccountNo);
+  const previewQR =
+    bankName && cleanAccount.length >= 3
+      ? getVietQRImageUrl({
+          bankName,
+          accountNo: cleanAccount,
+          accountName: bankAccountName,
+          message: 'Cam on dong nghiep',
+        })
+      : null;
+
+  useEffect(() => {
+    if (previewQR) {
+      setQrLoading(true);
+      setQrError(false);
+    }
+  }, [previewQR]);
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
@@ -179,24 +197,6 @@ export default function EditProfilePage() {
       </div>
     );
   }
-
-  const cleanAccount = cleanAccountNumber(bankAccountNo);
-  const previewQR =
-    bankName && cleanAccount.length >= 3
-      ? getVietQRImageUrl({
-          bankName,
-          accountNo: cleanAccount,
-          accountName: bankAccountName,
-          message: 'Cam on dong nghiep',
-        })
-      : null;
-
-  useEffect(() => {
-    if (previewQR) {
-      setQrLoading(true);
-      setQrError(false);
-    }
-  }, [previewQR]);
 
   return (
     <div className="p-3 sm:p-6 max-w-xl mx-auto w-full">

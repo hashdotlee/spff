@@ -345,9 +345,6 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
               <MapPin className="w-4 h-4 text-orange-600" />
               <span>Điểm Ghim Định Vị Đã Đóng Góp ({warehouses.length})</span>
             </h2>
-            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
-              +{warehouses.length * 10}đ cống hiến
-            </span>
           </div>
 
           {warehouses.length > 0 ? (
@@ -447,6 +444,10 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
                   </div>
 
                   <div className="flex items-center justify-between xs:justify-end gap-2 shrink-0">
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
+                      +5đ
+                    </span>
+
                     <div className="flex items-center gap-1 font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
                       <ThumbsUp className="w-3.5 h-3.5" />
                       <span>+{vn.upvotes_count}</span>
@@ -465,7 +466,7 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
           ) : (
             <p className="text-xs text-slate-500 italic py-2">
               {isOwner
-                ? 'Bạn chưa ghi chú chỉ đường nào. Hãy đến một kho hàng và thu âm chỉ đường để hỗ trợ đồng nghiệp!'
+                ? 'Bạn chưa ghi chú chỉ đường nào. Hãy đến một kho hàng và thu âm chỉ đường để hỗ trợ đồng nghiệp và nhận ngay +5 điểm cống hiến mỗi voice!'
                 : 'Tài xế này chưa ghi chú chỉ đường nào.'}
             </p>
           )}

@@ -10,6 +10,9 @@ import {
   deleteVoiceNote,
   toggleWarehouseStatus,
   toggleVoiceNoteStatus,
+  banUser,
+  unbanUser,
+  recalculateReputation,
 } from '@/lib/utils/adminActions';
 import {
   ShieldAlert,
@@ -29,6 +32,13 @@ import {
   Pause,
   Building2,
   RefreshCw,
+  Users,
+  Phone,
+  Truck,
+  Calendar,
+  Edit3,
+  RotateCcw,
+  Award,
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -36,9 +46,10 @@ export default function AdminPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [voiceNotes, setVoiceNotes] = useState<VoiceNote[]>([]);
+  const [allUsers, setAllUsers] = useState<Profile[]>([]);
   const [bannedUsers, setBannedUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'reports' | 'warehouses' | 'voice_notes' | 'banned'>('reports');
+  const [activeTab, setActiveTab] = useState<'reports' | 'warehouses' | 'voice_notes' | 'users'>('reports');
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   // Search & Filter states
@@ -46,6 +57,8 @@ export default function AdminPage() {
   const [warehouseFilter, setWarehouseFilter] = useState<'all' | 'active' | 'hidden'>('all');
   const [searchVoice, setSearchVoice] = useState('');
   const [voiceFilter, setVoiceFilter] = useState<'all' | 'active' | 'hidden'>('all');
+  const [searchUser, setSearchUser] = useState('');
+  const [userFilter, setUserFilter] = useState<'all' | 'active' | 'banned' | 'admin'>('all');
 
   // Audio preview playback in admin
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
@@ -120,14 +133,16 @@ export default function AdminPage() {
 
       if (vnData) setVoiceNotes(vnData as any);
 
-      // 4. Load banned users
-      const { data: bannedData } = await supabase
+      // 4. Load all user profiles
+      const { data: usersData } = await supabase
         .from('profiles')
         .select('*')
-        .eq('is_banned', true)
-        .order('updated_at', { ascending: false });
+        .order('created_at', { ascending: false });
 
-      if (bannedData) setBannedUsers(bannedData);
+      if (usersData) {
+        setAllUsers(usersData as Profile[]);
+        setBannedUsers((usersData as Profile[]).filter((u: Profile) => u.is_banned));
+      }
     } catch (err) {
       console.error('Admin load error:', err);
     } finally {
@@ -233,11 +248,11 @@ export default function AdminPage() {
 
   // Khóa tài khoản
   async function handleBanUser(userId: string) {
-    if (!confirm('Bạn có chắc chắn muốn KHÓA tài khoản này không?')) return;
+    if (!confirm('Bạn có chắc chắn muốn KHÓA tài khoản này không?\nToàn bộ điểm cống hiến sẽ bị xóa và các kho/voice của tài khoản sẽ bị ẩn.')) return;
 
     try {
-      await supabase.from('profiles').update({ is_banned: true }).eq('id', userId);
-      setMessage({ text: 'Đã khóa tài khoản thành công!', type: 'success' });
+      await banUser(supabase, userId);
+      setMessage({ text: 'Đã khóa tài khoản, xóa điểm và ẩn các đóng góp thành công!', type: 'success' });
       checkAdminAndLoad();
     } catch {
       setMessage({ text: 'Lỗi khi khóa tài khoản.', type: 'error' });
@@ -247,11 +262,57 @@ export default function AdminPage() {
   // Mở khóa tài khoản
   async function handleUnbanUser(userId: string) {
     try {
-      await supabase.from('profiles').update({ is_banned: false }).eq('id', userId);
-      setMessage({ text: 'Đã mở khóa tài khoản thành công!', type: 'success' });
+      await unbanUser(supabase, userId);
+      setMessage({ text: 'Đã mở khóa tài khoản và tính lại điểm thành công!', type: 'success' });
       checkAdminAndLoad();
     } catch {
       setMessage({ text: 'Lỗi khi mở khóa tài khoản.', type: 'error' });
+    }
+  }
+
+  // Đổi vai trò (Admin / Driver)
+  async function handleToggleRole(userId: string, currentRole: string) {
+    const newRole = currentRole === 'admin' ? 'driver' : 'admin';
+    if (!confirm(`Bạn có chắc muốn đổi quyền tài khoản này thành "${newRole === 'admin' ? 'Quản trị viên (Admin)' : 'Tài xế'}"?`)) return;
+
+    try {
+      const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
+      if (error) throw error;
+      setMessage({ text: `Đã đổi vai trò thành ${newRole === 'admin' ? 'Quản trị viên' : 'Tài xế'}!`, type: 'success' });
+      checkAdminAndLoad();
+    } catch {
+      setMessage({ text: 'Lỗi khi cập nhật vai trò người dùng.', type: 'error' });
+    }
+  }
+
+  // Chỉnh sửa điểm cống hiến thủ công
+  async function handleEditReputation(userId: string, currentScore: number) {
+    const input = prompt('Nhập điểm cống hiến mới cho tài khoản này:', currentScore.toString());
+    if (input === null) return;
+    const newScore = parseInt(input.trim(), 10);
+    if (isNaN(newScore) || newScore < 0) {
+      alert('Điểm cống hiến phải là số nguyên không âm!');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('profiles').update({ reputation_score: newScore }).eq('id', userId);
+      if (error) throw error;
+      setMessage({ text: `Đã cập nhật điểm cống hiến thành ${newScore} điểm!`, type: 'success' });
+      checkAdminAndLoad();
+    } catch {
+      setMessage({ text: 'Lỗi khi cập nhật điểm cống hiến.', type: 'error' });
+    }
+  }
+
+  // Tính lại điểm cống hiến tự động từ kho và voice thực tế
+  async function handleRecalculateReputationAction(userId: string) {
+    try {
+      await recalculateReputation(supabase, userId);
+      setMessage({ text: 'Đã tính toán lại điểm cống hiến theo dữ liệu kho và voice thực tế!', type: 'success' });
+      checkAdminAndLoad();
+    } catch {
+      setMessage({ text: 'Lỗi khi tính lại điểm cống hiến.', type: 'error' });
     }
   }
 
@@ -291,6 +352,22 @@ export default function AdminPage() {
     return matchSearch && vn.status === voiceFilter;
   });
 
+  // Filtered users
+  const filteredUsers = allUsers.filter((u: Profile) => {
+    const query = searchUser.toLowerCase();
+    const matchSearch =
+      (u.full_name || '').toLowerCase().includes(query) ||
+      (u.email || '').toLowerCase().includes(query) ||
+      (u.phone || '').toLowerCase().includes(query) ||
+      (u.bank_account_no || '').toLowerCase().includes(query) ||
+      (u.bank_name || '').toLowerCase().includes(query);
+
+    if (userFilter === 'active') return matchSearch && !u.is_banned;
+    if (userFilter === 'banned') return matchSearch && u.is_banned;
+    if (userFilter === 'admin') return matchSearch && u.role === 'admin';
+    return matchSearch;
+  });
+
   const pendingReportsCount = reports.filter((r) => r.status === 'pending').length;
 
   return (
@@ -313,7 +390,7 @@ export default function AdminPage() {
               Khu Vực Quản Trị Viên (Admin)
             </h1>
             <p className="text-xs text-slate-500">
-              Kiểm duyệt bất thường, xóa kho, xóa chỉ dẫn sai lệch và quản lý vi phạm
+              Kiểm duyệt bất thường, quản lý tài khoản, xóa kho và xử lý vi phạm
             </p>
           </div>
         </div>
@@ -344,8 +421,13 @@ export default function AdminPage() {
           <span className="text-xl font-black text-slate-800">{voiceNotes.length}</span>
         </div>
         <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
-          <span className="text-[11px] text-slate-500 font-medium block">Tài khoản đã khóa</span>
-          <span className="text-xl font-black text-red-600">{bannedUsers.length}</span>
+          <span className="text-[11px] text-slate-500 font-medium block">Tổng tài khoản</span>
+          <span className="text-xl font-black text-slate-900">
+            {allUsers.length}
+            {bannedUsers.length > 0 && (
+              <span className="text-xs text-red-600 font-bold ml-1.5">({bannedUsers.length} khóa)</span>
+            )}
+          </span>
         </div>
       </div>
 
@@ -408,15 +490,20 @@ export default function AdminPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab('banned')}
+          onClick={() => setActiveTab('users')}
           className={`pb-2.5 sm:pb-3 px-2 sm:px-1 border-b-2 transition flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
-            activeTab === 'banned'
+            activeTab === 'users'
               ? 'border-red-600 text-red-600'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          <ShieldBan className="w-4 h-4" />
-          <span>Tài khoản đã khóa ({bannedUsers.length})</span>
+          <Users className="w-4 h-4" />
+          <span>Quản lý Tài khoản ({allUsers.length})</span>
+          {bannedUsers.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-red-600 text-white text-[10px]">
+              {bannedUsers.length} khóa
+            </span>
+          )}
         </button>
       </div>
 
@@ -851,37 +938,214 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ===================== TAB 4: BANNED USERS ===================== */}
-      {activeTab === 'banned' && (
-        <div className="space-y-2.5 sm:space-y-3">
-          {bannedUsers.length > 0 ? (
-            bannedUsers.map((u) => (
-              <div
-                key={u.id}
-                className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200 flex flex-col xs:flex-row items-stretch xs:items-center justify-between gap-3 shadow-xs"
+      {/* ===================== TAB 4: USER ACCOUNTS ===================== */}
+      {activeTab === 'users' && (
+        <div className="space-y-3">
+          {/* Search & Filter Controls */}
+          <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchUser}
+                onChange={(e) => setSearchUser(e.target.value)}
+                placeholder="Tìm tài xế theo họ tên, SĐT, biển số xe, loại xe..."
+                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-red-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                onClick={() => setUserFilter('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition active:scale-95 ${
+                  userFilter === 'all'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-sm shrink-0">
-                    {u.full_name?.[0]?.toUpperCase() || 'TX'}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-bold text-slate-900 truncate">{u.full_name}</h3>
-                    <p className="text-xs text-slate-400 truncate">{u.email || u.id}</p>
+                Tất cả ({allUsers.length})
+              </button>
+              <button
+                onClick={() => setUserFilter('active')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition active:scale-95 ${
+                  userFilter === 'active'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Đang hoạt động ({allUsers.filter((u) => !u.is_banned).length})
+              </button>
+              <button
+                onClick={() => setUserFilter('banned')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition active:scale-95 ${
+                  userFilter === 'banned'
+                    ? 'bg-red-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Đã bị khóa ({bannedUsers.length})
+              </button>
+              <button
+                onClick={() => setUserFilter('admin')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition active:scale-95 ${
+                  userFilter === 'admin'
+                    ? 'bg-rose-700 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Quản trị viên ({allUsers.filter((u) => u.role === 'admin').length})
+              </button>
+            </div>
+          </div>
+
+          {/* User List */}
+          {filteredUsers.length > 0 ? (
+            <div className="space-y-2.5">
+              {filteredUsers.map((u) => (
+                <div
+                  key={u.id}
+                  className={`bg-white rounded-2xl p-3.5 sm:p-4 border transition shadow-xs space-y-3 ${
+                    u.is_banned ? 'border-red-300 bg-red-50/20' : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    {/* Avatar & User Info */}
+                    <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                      <Link
+                        href={`/profile/${u.id}`}
+                        className="w-11 h-11 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-black text-sm shrink-0 overflow-hidden active:scale-95 transition"
+                      >
+                        {u.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={u.avatar_url} alt={u.full_name} className="w-full h-full object-cover" />
+                        ) : (
+                          u.full_name?.[0]?.toUpperCase() || 'TX'
+                        )}
+                      </Link>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                          <Link
+                            href={`/profile/${u.id}`}
+                            className="text-sm sm:text-base font-bold text-slate-900 hover:text-orange-600 transition truncate"
+                          >
+                            {u.full_name || 'Bác tài chưa đặt tên'}
+                          </Link>
+
+                          {u.role === 'admin' ? (
+                            <span className="text-[10px] font-black uppercase tracking-wider text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                              <ShieldAlert className="w-3 h-3 text-rose-600" />
+                              <span>Quản trị viên</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                              Tài xế
+                            </span>
+                          )}
+
+                          {u.is_banned ? (
+                            <span className="text-[10px] font-bold text-red-700 bg-red-100 border border-red-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                              <ShieldBan className="w-3 h-3 text-red-600" />
+                              <span>Đã bị khóa</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3 text-emerald-600" />
+                              <span>Hoạt động</span>
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-500">
+                          {u.phone && (
+                            <span className="inline-flex items-center gap-1">
+                              <Phone className="w-3 h-3 text-slate-400" />
+                              <span>{u.phone}</span>
+                            </span>
+                          )}
+
+                          {u.bank_account_no && (
+                            <span className="inline-flex items-center gap-1 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
+                              <span>{u.bank_name || 'Bank'}: {u.bank_account_no}</span>
+                            </span>
+                          )}
+
+                          <span className="inline-flex items-center gap-1 font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200 text-[11px]">
+                            <Award className="w-3.5 h-3.5 text-amber-600" />
+                            <span>{u.reputation_score}đ cống hiến</span>
+                          </span>
+
+                          <span className="text-slate-400 text-[11px]">
+                            Tham gia: {new Date(u.created_at).toLocaleDateString('vi-VN')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex flex-wrap items-center gap-1.5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                      <Link
+                        href={`/profile/${u.id}`}
+                        target="_blank"
+                        className="min-h-[34px] px-2.5 py-1 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-semibold transition inline-flex items-center gap-1 active:scale-95"
+                        title="Xem trang cá nhân"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span className="hidden xs:inline">Hồ sơ</span>
+                      </Link>
+
+                      <button
+                        onClick={() => handleRecalculateReputationAction(u.id)}
+                        className="min-h-[34px] px-2.5 py-1 text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-xs font-semibold transition inline-flex items-center gap-1 active:scale-95"
+                        title="Tính lại điểm cống hiến theo kho và voice thực tế"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                        <span className="hidden xs:inline">Tính lại</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleEditReputation(u.id, u.reputation_score || 0)}
+                        className="min-h-[34px] px-2.5 py-1 text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold transition inline-flex items-center gap-1 active:scale-95"
+                        title="Chỉnh sửa điểm cống hiến"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Sửa điểm</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleToggleRole(u.id, u.role)}
+                        className="min-h-[34px] px-2.5 py-1 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-semibold transition inline-flex items-center gap-1 active:scale-95"
+                        title={u.role === 'admin' ? 'Hạ quyền xuống Tài xế' : 'Cấp quyền Quản trị viên'}
+                      >
+                        <span>{u.role === 'admin' ? 'Hạ TX' : 'Lên Admin'}</span>
+                      </button>
+
+                      {u.is_banned ? (
+                        <button
+                          onClick={() => handleUnbanUser(u.id)}
+                          className="min-h-[34px] px-3 py-1 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1 shadow-xs"
+                        >
+                          <ShieldCheck className="w-4 h-4" />
+                          <span>Mở khóa</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleBanUser(u.id)}
+                          className="min-h-[34px] px-3 py-1 bg-red-600 hover:bg-red-700 active:scale-95 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1 shadow-xs"
+                          title="Khóa tài khoản (xóa điểm và ẩn tất cả kho/voice)"
+                        >
+                          <ShieldBan className="w-4 h-4" />
+                          <span>Khóa</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                <button
-                  onClick={() => handleUnbanUser(u.id)}
-                  className="min-h-[40px] px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shrink-0"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Mở khóa tài khoản</span>
-                </button>
-              </div>
-            ))
+              ))}
+            </div>
           ) : (
-            <div className="p-8 text-center text-slate-500 bg-white rounded-2xl border border-slate-200">
-              Hiện không có tài khoản nào bị khóa.
+            <div className="p-8 text-center text-slate-500 bg-white rounded-2xl border border-slate-200 text-xs">
+              Không tìm thấy tài khoản nào phù hợp với bộ lọc.
             </div>
           )}
         </div>
