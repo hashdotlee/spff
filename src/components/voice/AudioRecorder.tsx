@@ -182,6 +182,26 @@ export function AudioRecorder({ warehouseId, onSuccess }: AudioRecorderProps) {
         throw new Error(dbError.message);
       }
 
+      // 3. Cập nhật điểm cống hiến cho tài xế (+5 điểm khi đóng góp voice)
+      try {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('reputation_score')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (prof) {
+          await supabase
+            .from('profiles')
+            .update({
+              reputation_score: (prof.reputation_score || 0) + 5,
+            })
+            .eq('id', user.id);
+        }
+      } catch (repErr) {
+        console.warn('Lỗi cập nhật điểm cống hiến voice:', repErr);
+      }
+
       // Reset form and notify parent
       resetRecording();
       setNoteText('');
@@ -359,7 +379,7 @@ export function AudioRecorder({ warehouseId, onSuccess }: AudioRecorderProps) {
               ) : (
                 <>
                   <Send className="w-4 h-4 shrink-0" />
-                  <span>Chia Sẻ Chỉ Dẫn</span>
+                  <span>Chia Sẻ Chỉ Dẫn (+5đ ⭐)</span>
                 </>
               )}
             </button>

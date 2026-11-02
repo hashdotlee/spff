@@ -326,12 +326,17 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
               </Link>
               <div className="min-w-0 flex-1">
                 <span className="text-[11px] text-slate-500 font-medium block">Người đã ghim kho:</span>
-                <Link
-                  href={`/profile/${warehouse.creator.id}`}
-                  className="text-xs sm:text-sm font-bold text-slate-900 hover:text-orange-600 truncate block transition"
-                >
-                  {warehouse.creator.full_name}
-                </Link>
+                <div className="flex items-center gap-1.5">
+                  <Link
+                    href={`/profile/${warehouse.creator.id}`}
+                    className="text-xs sm:text-sm font-bold text-slate-900 hover:text-orange-600 truncate transition"
+                  >
+                    {warehouse.creator.full_name}
+                  </Link>
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200 shrink-0">
+                    {warehouse.creator.reputation_score || 0}đ
+                  </span>
+                </div>
                 <span className="text-[10px] text-slate-400 block mt-0.5">
                   Đã ghim ngày {new Date(warehouse.created_at).toLocaleDateString('vi-VN')}
                 </span>

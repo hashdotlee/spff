@@ -52,7 +52,7 @@ export default function LeaderboardPage() {
           Bảng Vàng Bác Tài
         </h1>
         <p className="text-xs text-slate-600 mt-1 max-w-md mx-auto leading-relaxed">
-          Tôn vinh các bác tài tích cực nhất đóng góp chỉ dẫn ngõ ngách, cứu nguy đồng nghiệp không lo lạc đường
+          Tôn vinh các bác tài tích cực nhất ghim bến bãi, đóng góp chỉ dẫn ngõ ngách, cứu nguy đồng nghiệp không lo lạc đường
         </p>
       </div>
 

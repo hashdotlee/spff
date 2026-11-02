@@ -203,6 +203,27 @@ export default function NewWarehousePage() {
         }
       }
 
+      // D. Cập nhật điểm cống hiến (+10đ cho ghim định vị, +5đ nếu kèm voice)
+      try {
+        const bonusPoints = audioBlob ? 15 : 10;
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('reputation_score')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (prof) {
+          await supabase
+            .from('profiles')
+            .update({
+              reputation_score: (prof.reputation_score || 0) + bonusPoints,
+            })
+            .eq('id', user.id);
+        }
+      } catch (repErr) {
+        console.warn('Lỗi cập nhật điểm cống hiến:', repErr);
+      }
+
       // Hoàn tất -> chuyển thẳng đến trang chi tiết kho vừa tạo
       router.push(`/warehouse/${whData.id}`);
     } catch (err: any) {
@@ -245,9 +266,14 @@ export default function NewWarehousePage() {
             <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight flex items-center gap-1.5">
               <span>Ghim Địa Chỉ / Bến Bãi</span>
             </h1>
-            <span className="text-[11px] text-slate-500 block -mt-0.5">
-              Chụp ảnh hiện trường → Thu âm chỉ dẫn → Đăng ngay
-            </span>
+            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                ⭐ +10 điểm cống hiến
+              </span>
+              <span className="text-[11px] text-slate-500">
+                Chụp ảnh hiện trường → Thu âm chỉ dẫn → Đăng ngay
+              </span>
+            </div>
           </div>
         </div>
 
@@ -393,7 +419,7 @@ export default function NewWarehousePage() {
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                <span>Đăng Ghim Địa Chỉ Ngay 🚀</span>
+                <span>Đăng Ghim Địa Chỉ (+10đ ⭐)</span>
               </>
             )}
           </button>

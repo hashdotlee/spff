@@ -121,7 +121,102 @@ CREATE TABLE IF NOT EXISTS public.user_badges (
     UNIQUE(user_id, badge_id)
 );
 
--- 8. Functions & Triggers for Vote Aggregation and Reputation
+-- 8. Functions & Triggers for Reputation, Location Pinning, Voice & Votes
+CREATE OR REPLACE FUNCTION public.recalculate_user_reputation(target_user_id UUID)
+RETURNS void AS $$
+DECLARE
+    warehouse_pts INT := 0;
+    voice_pts INT := 0;
+    vote_pts INT := 0;
+    total_pts INT := 0;
+BEGIN
+    IF target_user_id IS NULL THEN
+        RETURN;
+    END IF;
+
+    -- A. Điểm từ ghim định vị kho bãi (+10 điểm mỗi điểm ghim)
+    SELECT COALESCE(COUNT(*) * 10, 0) INTO warehouse_pts
+    FROM public.warehouses
+    WHERE created_by = target_user_id
+      AND status = 'active';
+
+    -- B. Điểm từ voice chỉ dẫn đóng góp (+5 điểm mỗi voice note)
+    SELECT COALESCE(COUNT(*) * 5, 0) INTO voice_pts
+    FROM public.voice_notes
+    WHERE user_id = target_user_id
+      AND status = 'active';
+
+    -- C. Điểm từ đánh giá cộng đồng (+5 mỗi upvote, -2 mỗi downvote)
+    SELECT COALESCE(SUM(CASE WHEN vv.vote_value = 1 THEN 5 ELSE -2 END), 0) INTO vote_pts
+    FROM public.voice_notes vn
+    JOIN public.voice_votes vv ON vn.id = vv.voice_note_id
+    WHERE vn.user_id = target_user_id
+      AND vn.status = 'active';
+
+    total_pts := GREATEST(0, warehouse_pts + voice_pts + vote_pts);
+
+    -- Cập nhật reputation_score cho profile
+    UPDATE public.profiles
+    SET reputation_score = total_pts,
+        updated_at = timezone('utc'::text, now())
+    WHERE id = target_user_id;
+
+    -- Tự động gán huy hiệu theo điểm cống hiến
+    INSERT INTO public.user_badges (user_id, badge_id)
+    SELECT target_user_id, b.id
+    FROM public.badges b
+    WHERE total_pts >= b.min_points
+    ON CONFLICT (user_id, badge_id) DO NOTHING;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger cho warehouses: cập nhật điểm khi ghim/xóa kho
+CREATE OR REPLACE FUNCTION public.handle_warehouse_reputation_change()
+RETURNS trigger AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        PERFORM public.recalculate_user_reputation(OLD.created_by);
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF OLD.created_by IS DISTINCT FROM NEW.created_by OR OLD.status IS DISTINCT FROM NEW.status THEN
+            PERFORM public.recalculate_user_reputation(OLD.created_by);
+            PERFORM public.recalculate_user_reputation(NEW.created_by);
+        END IF;
+    ELSE -- INSERT
+        PERFORM public.recalculate_user_reputation(NEW.created_by);
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_warehouse_reputation_changed ON public.warehouses;
+CREATE TRIGGER on_warehouse_reputation_changed
+    AFTER INSERT OR UPDATE OR DELETE ON public.warehouses
+    FOR EACH ROW EXECUTE PROCEDURE public.handle_warehouse_reputation_change();
+
+-- Trigger cho voice_notes: cập nhật điểm khi thêm/xóa voice note
+CREATE OR REPLACE FUNCTION public.handle_voice_note_reputation_change()
+RETURNS trigger AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        PERFORM public.recalculate_user_reputation(OLD.user_id);
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF OLD.user_id IS DISTINCT FROM NEW.user_id OR OLD.status IS DISTINCT FROM NEW.status THEN
+            PERFORM public.recalculate_user_reputation(OLD.user_id);
+            PERFORM public.recalculate_user_reputation(NEW.user_id);
+        END IF;
+    ELSE -- INSERT
+        PERFORM public.recalculate_user_reputation(NEW.user_id);
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_voice_note_reputation_changed ON public.voice_notes;
+CREATE TRIGGER on_voice_note_reputation_changed
+    AFTER INSERT OR UPDATE OR DELETE ON public.voice_notes
+    FOR EACH ROW EXECUTE PROCEDURE public.handle_voice_note_reputation_change();
+
+-- Trigger cho voice_votes: cập nhật vote count và điểm tác giả
 CREATE OR REPLACE FUNCTION public.handle_voice_vote_change()
 RETURNS trigger AS $$
 DECLARE
@@ -150,25 +245,8 @@ BEGIN
     WHERE id = target_note_id
     RETURNING user_id INTO target_author_id;
 
-    -- Cập nhật reputation cho tác giả của voice note (+5 cho mỗi upvote, -2 cho mỗi downvote)
     IF target_author_id IS NOT NULL THEN
-        UPDATE public.profiles
-        SET reputation_score = GREATEST(0, (
-            SELECT COALESCE(SUM(CASE WHEN vv.vote_value = 1 THEN 5 ELSE -2 END), 0)
-            FROM public.voice_notes vn
-            JOIN public.voice_votes vv ON vn.id = vv.voice_note_id
-            WHERE vn.user_id = target_author_id
-        ))
-        WHERE id = target_author_id;
-
-        -- Kiểm tra tự động gán badges dựa trên reputation_score
-        INSERT INTO public.user_badges (user_id, badge_id)
-        SELECT target_author_id, b.id
-        FROM public.badges b
-        CROSS JOIN public.profiles p
-        WHERE p.id = target_author_id
-          AND p.reputation_score >= b.min_points
-        ON CONFLICT (user_id, badge_id) DO NOTHING;
+        PERFORM public.recalculate_user_reputation(target_author_id);
     END IF;
 
     RETURN NULL;

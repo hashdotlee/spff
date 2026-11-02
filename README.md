@@ -59,12 +59,13 @@ Mở trình duyệt tại [http://localhost:3000](http://localhost:3000).
   - Đánh dấu marker sự cố nhấp nháy màu đỏ 🚨 trực tiếp trên bản đồ Trang chủ kèm banner cảnh báo sự cố xung quanh.
 - **Ghim kho mới & Chụp ảnh cổng kho (`/warehouse/new`, `/warehouse/[id]`)**:
   - Tích hợp tính năng **chụp ảnh trực tiếp bằng camera điện thoại** hoặc chọn ảnh từ thư viện cho cổng bến bãi, biển hiệu.
+  - Tự động cộng **+10 điểm cống hiến** cho mỗi điểm ghim định vị bến bãi hợp lệ.
   - Tự động nén ảnh chất lượng cao và hiển thị ảnh thực tế tại trang chi tiết kho, xem phóng to toàn màn hình.
   - Hiển thị huy hiệu "Ảnh thực tế" và thumbnail trên danh sách kho gần nhất và bản đồ.
 - **Chi tiết kho & Thu âm Voice (`/warehouse/[id]`)**:
-  - Thu âm micro trực tiếp với thanh sóng âm thanh và đếm ngược tối đa 60s.
+  - Thu âm micro trực tiếp với thanh sóng âm thanh và đếm ngược tối đa 60s (+5 điểm cống hiến).
   - Nghe lại thử trước khi đăng. Upload trực tiếp lên Supabase Storage `voice-notes`.
-  - Upvote / Downvote cộng/trừ điểm uy tín tự động cho người tạo.
+  - Upvote / Downvote (+5đ / -2đ) điểm uy tín tự động cho người tạo.
   - Nút Báo cáo cờ đỏ vi phạm gửi lên Admin.
 - **Hồ sơ & VietQR Donate (`/profile/[id]`, `/profile/edit`)**:
   - Tạo mã VietQR động theo STK và ngân hàng của tài xế để nhận tiền tip cảm ơn.

@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import type { Profile, UserBadge, VoiceNote, Report } from '@/types/database';
+import type { Profile, UserBadge, VoiceNote, Report, Warehouse } from '@/types/database';
 import { VietQRModal } from '@/components/donation/VietQRModal';
 import {
   Award,
@@ -31,9 +31,10 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
   const [profile, setProfile] = useState<Profile | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userBadges, setUserBadges] = useState<UserBadge[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [voiceNotes, setVoiceNotes] = useState<VoiceNote[]>([]);
   const [myReports, setMyReports] = useState<Report[]>([]);
-  const [activeTab, setActiveTab] = useState<'contributions' | 'reports'>('contributions');
+  const [activeTab, setActiveTab] = useState<'warehouses' | 'contributions' | 'reports'>('warehouses');
   const [loading, setLoading] = useState(true);
   const [showQRModal, setShowQRModal] = useState(false);
 
@@ -82,6 +83,23 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
           setUserBadges(badgesData);
         }
 
+        // Load warehouses pinned by this user
+        const { data: whData } = await supabase
+          .from('warehouses')
+          .select('*, voice_notes:voice_notes(count)')
+          .eq('created_by', profileId)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false });
+
+        let userWhList: Warehouse[] = [];
+        if (whData) {
+          userWhList = whData.map((wh: any) => ({
+            ...wh,
+            voice_notes_count: wh.voice_notes?.[0]?.count || 0,
+          }));
+          setWarehouses(userWhList);
+        }
+
         const { data: notesData } = await supabase
           .from('voice_notes')
           .select('*')
@@ -91,6 +109,9 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
 
         if (notesData) {
           setVoiceNotes(notesData);
+          if (userWhList.length === 0 && notesData.length > 0) {
+            setActiveTab('contributions');
+          }
         }
 
         // If the viewer is the owner of this profile, load their reports
@@ -267,29 +288,41 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
           </div>
         ) : (
           <p className="text-xs text-slate-500 italic py-2">
-            Chưa có huy hiệu. Hãy chia sẻ chỉ đường để tích lũy điểm cống hiến!
+            Chưa có huy hiệu. Hãy ghim định vị bến bãi hoặc chia sẻ chỉ đường để tích lũy điểm cống hiến!
           </p>
         )}
       </div>
 
-      {/* Navigation Tabs between Contributed Voice Notes & Reports (when owner) */}
-      {isOwner ? (
-        <div className="flex border-b border-slate-200 gap-2 sm:gap-4 text-xs font-bold">
-          <button
-            onClick={() => setActiveTab('contributions')}
-            className={`pb-2.5 sm:pb-3 px-2 sm:px-1 border-b-2 transition flex items-center gap-1.5 ${
-              activeTab === 'contributions'
-                ? 'border-orange-600 text-orange-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Volume2 className="w-4 h-4" />
-            <span>Chỉ Dẫn Voice ({voiceNotes.length})</span>
-          </button>
+      {/* Navigation Tabs between Pinned Locations, Voice Notes & Reports */}
+      <div className="flex border-b border-slate-200 gap-2 sm:gap-4 text-xs font-bold overflow-x-auto no-scrollbar">
+        <button
+          onClick={() => setActiveTab('warehouses')}
+          className={`pb-2.5 sm:pb-3 px-2 sm:px-1 border-b-2 transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            activeTab === 'warehouses'
+              ? 'border-orange-600 text-orange-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <MapPin className="w-4 h-4" />
+          <span>Điểm Ghim Định Vị ({warehouses.length})</span>
+        </button>
 
+        <button
+          onClick={() => setActiveTab('contributions')}
+          className={`pb-2.5 sm:pb-3 px-2 sm:px-1 border-b-2 transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            activeTab === 'contributions'
+              ? 'border-orange-600 text-orange-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Volume2 className="w-4 h-4" />
+          <span>Chỉ Dẫn Voice ({voiceNotes.length})</span>
+        </button>
+
+        {isOwner && (
           <button
             onClick={() => setActiveTab('reports')}
-            className={`pb-2.5 sm:pb-3 px-2 sm:px-1 border-b-2 transition flex items-center gap-1.5 ${
+            className={`pb-2.5 sm:pb-3 px-2 sm:px-1 border-b-2 transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'reports'
                 ? 'border-red-600 text-red-600'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -301,11 +334,95 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
             )}
           </button>
+        )}
+      </div>
+
+      {/* Warehouses contributed tab */}
+      {activeTab === 'warehouses' && (
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-orange-600" />
+              <span>Điểm Ghim Định Vị Đã Đóng Góp ({warehouses.length})</span>
+            </h2>
+            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+              +{warehouses.length * 10}đ cống hiến
+            </span>
+          </div>
+
+          {warehouses.length > 0 ? (
+            <div className="space-y-2.5 sm:space-y-3">
+              {warehouses.map((wh) => (
+                <div
+                  key={wh.id}
+                  className="p-3 sm:p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col xs:flex-row items-stretch xs:items-center justify-between gap-2.5 text-xs"
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    {wh.image_url ? (
+                      <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-slate-200 bg-slate-100">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={wh.image_url}
+                          alt={wh.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 border border-orange-200">
+                        <MapPin className="w-6 h-6" />
+                      </div>
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-slate-900 truncate">
+                        {wh.name}
+                      </p>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                        <span>{wh.voice_notes_count || 0} voice chỉ dẫn</span>
+                        <span>•</span>
+                        <span>{new Date(wh.created_at).toLocaleDateString('vi-VN')}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between xs:justify-end gap-2 shrink-0">
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
+                      +10đ
+                    </span>
+
+                    <Link
+                      href={`/warehouse/${wh.id}`}
+                      className="min-h-[34px] px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold text-[11px] transition flex items-center justify-center active:scale-95"
+                    >
+                      Xem kho
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6 space-y-2">
+              <p className="text-xs text-slate-500 italic">
+                {isOwner
+                  ? 'Bạn chưa ghim điểm bến bãi nào. Hãy ghim các địa chỉ thực tế để nhận ngay +10 điểm cống hiến mỗi điểm!'
+                  : 'Tài xế này chưa ghim điểm bến bãi nào.'}
+              </p>
+              {isOwner && (
+                <Link
+                  href="/warehouse/new"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition shadow-xs"
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>Ghim Địa Chỉ Ngay (+10đ)</span>
+                </Link>
+              )}
+            </div>
+          )}
         </div>
-      ) : null}
+      )}
 
       {/* Voice notes contributed tab */}
-      {(!isOwner || activeTab === 'contributions') && (
+      {activeTab === 'contributions' && (
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs">
           <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
             <Volume2 className="w-4 h-4 text-orange-600" />
