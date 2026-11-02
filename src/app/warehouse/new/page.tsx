@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { uploadImageToSupabase } from '@/lib/utils/imageUpload';
 import { recalculateReputation } from '@/lib/utils/adminActions';
 import { QuickVoiceInput } from '@/components/voice/QuickVoiceInput';
+import { geocodeAddress, reverseGeocode } from '@/lib/utils/geocoding';
 import type { PlaceCategory } from '@/types/database';
 import {
   Camera,
@@ -25,6 +26,8 @@ import {
   CircleParking,
   Globe,
   Lock,
+  Navigation2,
+  Search,
 } from 'lucide-react';
 
 export default function NewWarehousePage() {
@@ -34,6 +37,14 @@ export default function NewWarehousePage() {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioDuration, setAudioDuration] = useState<number>(0);
   const [name, setName] = useState('');
+  const [exactAddress, setExactAddress] = useState('');
+  const [resolvedAddressCoords, setResolvedAddressCoords] = useState<{
+    lat: number;
+    lng: number;
+    displayName: string;
+  } | null>(null);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [autoReverseAddress, setAutoReverseAddress] = useState<string | null>(null);
   const [category, setCategory] = useState<PlaceCategory>('warehouse');
   const [isPrivate, setIsPrivate] = useState<boolean>(false);
   const [lat, setLat] = useState(21.0285);
@@ -60,10 +71,21 @@ export default function NewWarehousePage() {
 
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setLat(pos.coords.latitude);
-          setLng(pos.coords.longitude);
+        async (pos) => {
+          const gLat = pos.coords.latitude;
+          const gLng = pos.coords.longitude;
+          setLat(gLat);
+          setLng(gLng);
           setGpsReady(true);
+
+          try {
+            const rev = await reverseGeocode(gLat, gLng);
+            if (rev) {
+              setAutoReverseAddress(rev);
+            }
+          } catch (e) {
+            console.warn('Lỗi reverse geocode GPS:', e);
+          }
         },
         (err) => {
           console.warn('Geolocation error:', err);
@@ -73,6 +95,38 @@ export default function NewWarehousePage() {
       );
     }
   }, [supabase, router]);
+
+  // Tự động tìm kiếm tọa độ từ địa chỉ chính xác người dùng nhập (Debounce 700ms)
+  useEffect(() => {
+    const q = exactAddress.trim();
+    if (!q || q.length < 3) {
+      setResolvedAddressCoords(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsGeocoding(true);
+      try {
+        const results = await geocodeAddress(q);
+        if (results && results.length > 0) {
+          setResolvedAddressCoords({
+            lat: results[0].latitude,
+            lng: results[0].longitude,
+            displayName: results[0].displayName,
+          });
+        } else {
+          setResolvedAddressCoords(null);
+        }
+      } catch (err) {
+        console.warn('Lỗi tra cứu địa chỉ chính xác:', err);
+        setResolvedAddressCoords(null);
+      } finally {
+        setIsGeocoding(false);
+      }
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [exactAddress]);
 
   // 2. Tự động bật camera ngay khi mở trang
   useEffect(() => {
@@ -155,12 +209,39 @@ export default function NewWarehousePage() {
         compress: true,
       });
 
-      // B. Insert vào bảng warehouses (kèm category & is_private)
+      // Xác định tọa độ & địa chỉ: Ưu tiên địa chỉ chính xác nếu người dùng nhập
+      let finalLat = lat;
+      let finalLng = lng;
+      let finalAddress = exactAddress.trim() || autoReverseAddress || null;
+
+      if (exactAddress.trim()) {
+        if (resolvedAddressCoords) {
+          finalLat = resolvedAddressCoords.lat;
+          finalLng = resolvedAddressCoords.lng;
+          finalAddress = exactAddress.trim();
+        } else {
+          // Thử tra cứu geocode lần cuối trước khi insert
+          try {
+            setStatusText('Đang định vị theo địa chỉ chính xác...');
+            const results = await geocodeAddress(exactAddress.trim());
+            if (results && results.length > 0) {
+              finalLat = results[0].latitude;
+              finalLng = results[0].longitude;
+              finalAddress = exactAddress.trim();
+            }
+          } catch (e) {
+            console.warn('Lỗi geocode trước khi lưu:', e);
+          }
+        }
+      }
+
+      // B. Insert vào bảng warehouses (kèm category, is_private & address)
       setStatusText('Đang ghim vị trí lên bản đồ...');
       const insertPayload: any = {
         name: finalName,
-        latitude: lat,
-        longitude: lng,
+        address: finalAddress,
+        latitude: finalLat,
+        longitude: finalLng,
         image_url: uploadedImageUrl,
         created_by: user.id,
         category: category,
@@ -174,10 +255,11 @@ export default function NewWarehousePage() {
         .select()
         .single();
 
-      if (whError && (whError.code === '42703' || whError.message.includes('image_url') || whError.message.includes('category') || whError.message.includes('is_private'))) {
+      if (whError && (whError.code === '42703' || whError.message.includes('image_url') || whError.message.includes('category') || whError.message.includes('is_private') || whError.message.includes('address'))) {
         delete insertPayload.image_url;
         delete insertPayload.category;
         delete insertPayload.is_private;
+        delete insertPayload.address;
         const retryResult = await supabase
           .from('warehouses')
           .insert(insertPayload)
@@ -547,6 +629,107 @@ export default function NewWarehousePage() {
               }
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
             />
+          </div>
+
+          {/* Địa chỉ chính xác (Tùy chọn bổ sung cho định vị) */}
+          <div className="pt-2 border-t border-slate-100">
+            <div className="mb-2 space-y-0.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-orange-600" />
+                  <span>Địa chỉ chính xác</span>
+                  <span className="text-[10px] text-slate-400 font-medium normal-case">(Tùy chọn)</span>
+                </label>
+                <span className="text-[10px] font-extrabold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
+                  Ưu tiên số 1 🎯
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                Nhập số nhà, tên đường để bổ sung cho định vị. Nếu có địa chỉ chính xác sẽ <strong>ưu tiên dùng vị trí đó</strong>, còn không sẽ dùng <strong>định vị GPS</strong>.
+              </p>
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                value={exactAddress}
+                onChange={(e) => setExactAddress(e.target.value)}
+                placeholder={
+                  autoReverseAddress
+                    ? `VD: ${autoReverseAddress}`
+                    : 'VD: Số 25 ngõ 102 đường Nguyễn Hoàng, Nam Từ Liêm, Hà Nội'
+                }
+                className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
+              />
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                {isGeocoding && <Loader2 className="w-4 h-4 animate-spin text-orange-600" />}
+                {exactAddress && !isGeocoding && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExactAddress('');
+                      setResolvedAddressCoords(null);
+                    }}
+                    className="p-1 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                    title="Xóa địa chỉ"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Gợi ý dùng tên đường từ GPS hiện tại */}
+            {autoReverseAddress && !exactAddress && (
+              <button
+                type="button"
+                onClick={() => setExactAddress(autoReverseAddress)}
+                className="mt-1.5 text-[11px] text-slate-500 hover:text-orange-600 flex items-center gap-1 text-left transition active:scale-95 cursor-pointer flex-wrap"
+              >
+                <span>💡 Gợi ý theo GPS:</span>
+                <span className="text-orange-700 underline font-semibold truncate max-w-[240px] xs:max-w-[300px]">
+                  {autoReverseAddress}
+                </span>
+                <span className="text-[10px] bg-orange-100 text-orange-800 px-1.5 py-0.2 rounded font-bold">
+                  Sử dụng
+                </span>
+              </button>
+            )}
+
+            {/* Trạng thái định vị thực tế đang được áp dụng */}
+            <div className="mt-2.5 p-2.5 rounded-2xl border text-xs transition">
+              {resolvedAddressCoords ? (
+                <div className="flex items-start gap-2 bg-emerald-50/70 p-2 rounded-xl text-emerald-800 border border-emerald-200/80">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <span className="font-extrabold text-[11px] block text-emerald-900">
+                      🎯 Đang ưu tiên định vị theo địa chỉ chính xác
+                    </span>
+                    <span className="text-[10px] text-emerald-700 block truncate">
+                      {resolvedAddressCoords.displayName}
+                    </span>
+                    <span className="text-[9px] text-emerald-600 font-mono mt-0.5 block">
+                      Tọa độ: {resolvedAddressCoords.lat.toFixed(5)}, {resolvedAddressCoords.lng.toFixed(5)}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start gap-2 bg-blue-50/70 p-2 rounded-xl text-blue-800 border border-blue-200/80">
+                  <Navigation2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <span className="font-extrabold text-[11px] block text-blue-900">
+                      📡 Đang dùng định vị GPS từ thiết bị
+                    </span>
+                    <span className="text-[10px] text-blue-700 block truncate">
+                      {autoReverseAddress || 'Tọa độ thực tế từ cảm biến điện thoại'}
+                    </span>
+                    <span className="text-[9px] text-blue-600 font-mono mt-0.5 block">
+                      Tọa độ GPS: {lat.toFixed(5)}, {lng.toFixed(5)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Submit Button (Đăng luôn) */}

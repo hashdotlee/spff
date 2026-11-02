@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { IncidentType } from '@/types/database';
 import { uploadImageToSupabase } from '@/lib/utils/imageUpload';
 import { QuickVoiceInput } from '@/components/voice/QuickVoiceInput';
+import { geocodeAddress, reverseGeocode } from '@/lib/utils/geocoding';
 import {
   Camera,
   Image as ImageIcon,
@@ -49,6 +50,10 @@ export default function NewIncidentPage() {
   const [lat, setLat] = useState(21.0285);
   const [lng, setLng] = useState(105.8542);
   const [gpsReady, setGpsReady] = useState(false);
+  const [exactAddress, setExactAddress] = useState('');
+  const [resolvedCoords, setResolvedCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [autoReverseAddress, setAutoReverseAddress] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [statusText, setStatusText] = useState<string | null>(null);
@@ -81,10 +86,19 @@ export default function NewIncidentPage() {
 
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setLat(pos.coords.latitude);
-          setLng(pos.coords.longitude);
+        async (pos) => {
+          const gLat = pos.coords.latitude;
+          const gLng = pos.coords.longitude;
+          setLat(gLat);
+          setLng(gLng);
           setGpsReady(true);
+
+          try {
+            const rev = await reverseGeocode(gLat, gLng);
+            if (rev) setAutoReverseAddress(rev);
+          } catch (e) {
+            console.warn('Lỗi reverse geocode sự cố:', e);
+          }
         },
         (err) => {
           console.warn('Geolocation error:', err);
@@ -94,6 +108,36 @@ export default function NewIncidentPage() {
       );
     }
   }, [supabase, router]);
+
+  // Debounced Geocoding cho địa chỉ chính xác
+  useEffect(() => {
+    const q = exactAddress.trim();
+    if (!q || q.length < 3) {
+      setResolvedCoords(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsGeocoding(true);
+      try {
+        const results = await geocodeAddress(q);
+        if (results && results.length > 0) {
+          setResolvedCoords({
+            lat: results[0].latitude,
+            lng: results[0].longitude,
+          });
+        } else {
+          setResolvedCoords(null);
+        }
+      } catch (e) {
+        setResolvedCoords(null);
+      } finally {
+        setIsGeocoding(false);
+      }
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [exactAddress]);
 
   // 2. Xử lý khi chọn hoặc chụp ảnh hiện trường
   function handlePhotoCaptured(e: React.ChangeEvent<HTMLInputElement>) {
@@ -207,6 +251,30 @@ export default function NewIncidentPage() {
           : 'Tài xế đang gặp sự cố khẩn cấp trên đường cần anh em đồng nghiệp hỗ trợ gấp.';
       }
 
+      // Xác định tọa độ & địa chỉ: Ưu tiên địa chỉ chính xác nếu có
+      let finalLat = lat;
+      let finalLng = lng;
+      let finalAddress = exactAddress.trim() || autoReverseAddress || null;
+
+      if (exactAddress.trim()) {
+        if (resolvedCoords) {
+          finalLat = resolvedCoords.lat;
+          finalLng = resolvedCoords.lng;
+          finalAddress = exactAddress.trim();
+        } else {
+          try {
+            const results = await geocodeAddress(exactAddress.trim());
+            if (results && results.length > 0) {
+              finalLat = results[0].latitude;
+              finalLng = results[0].longitude;
+              finalAddress = exactAddress.trim();
+            }
+          } catch (e) {
+            console.warn('Lỗi geocode sự cố:', e);
+          }
+        }
+      }
+
       // C. Insert vào bảng incidents
       setStatusText('Đang phát tín hiệu SOS khẩn cấp...');
       const insertPayload: any = {
@@ -214,8 +282,9 @@ export default function NewIncidentPage() {
         title,
         incident_type: incidentType,
         description,
-        latitude: lat,
-        longitude: lng,
+        address: finalAddress,
+        latitude: finalLat,
+        longitude: finalLng,
         photo_url: uploadedPhotoUrl,
         phone: cleanPhone,
         status: 'open',
@@ -511,6 +580,66 @@ export default function NewIncidentPage() {
           placeholder="VD: Xe tải 2.5T chết máy ở làn ngoài cùng chân cầu..."
           className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
         />
+      </div>
+
+      {/* ======================================================== */}
+      {/* 5B. ĐỊA CHỈ CHÍNH XÁC (TÙY CHỌN BỔ SUNG CHO ĐỊNH VỊ)     */}
+      {/* ======================================================== */}
+      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+            <MapPin className="w-3.5 h-3.5 text-red-600" />
+            <span>Địa chỉ chính xác hiện trường</span>
+            <span className="text-[10px] text-slate-400 font-medium normal-case">(Tùy chọn)</span>
+          </label>
+          <span className="text-[10px] font-extrabold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-200">
+            Ưu tiên số 1 🎯
+          </span>
+        </div>
+        <p className="text-[10px] text-slate-500 font-medium">
+          Nếu có địa chỉ cụ thể (số nhà, cột mốc), hệ thống sẽ <strong>ưu tiên định vị theo địa chỉ đó</strong> để anh em cứu hộ đến nhanh nhất. Nếu để trống sẽ dùng <strong>định vị GPS</strong>.
+        </p>
+
+        <div className="relative">
+          <input
+            type="text"
+            value={exactAddress}
+            onChange={(e) => setExactAddress(e.target.value)}
+            placeholder={autoReverseAddress ? `VD: ${autoReverseAddress}` : 'VD: Số 55 đường Giải Phóng, Hai Bà Trưng...'}
+            className="w-full px-3.5 py-2.5 pr-8 rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
+          />
+          {isGeocoding && (
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-red-600 absolute right-2.5 top-1/2 -translate-y-1/2" />
+          )}
+        </div>
+
+        {autoReverseAddress && !exactAddress && (
+          <button
+            type="button"
+            onClick={() => setExactAddress(autoReverseAddress)}
+            className="text-[11px] text-slate-500 hover:text-red-600 flex items-center gap-1 text-left transition active:scale-95 cursor-pointer flex-wrap"
+          >
+            <span>💡 Gợi ý theo GPS:</span>
+            <span className="text-red-700 underline font-semibold truncate max-w-[240px] xs:max-w-[300px]">
+              {autoReverseAddress}
+            </span>
+            <span className="text-[10px] bg-red-50 text-red-800 px-1.5 py-0.2 rounded font-bold border border-red-200">
+              Sử dụng
+            </span>
+          </button>
+        )}
+
+        <div className="p-2 rounded-xl border text-xs">
+          {resolvedCoords ? (
+            <span className="text-[11px] text-emerald-800 font-bold flex items-center gap-1">
+              ✓ Đang ưu tiên định vị theo địa chỉ: {resolvedCoords.lat.toFixed(5)}, {resolvedCoords.lng.toFixed(5)}
+            </span>
+          ) : (
+            <span className="text-[11px] text-slate-600 font-medium flex items-center gap-1">
+              📡 Đang dùng định vị GPS từ điện thoại: {lat.toFixed(5)}, {lng.toFixed(5)}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ======================================================== */}

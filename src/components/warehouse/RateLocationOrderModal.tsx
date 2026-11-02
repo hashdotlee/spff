@@ -9,6 +9,7 @@ import {
   calculateOrderPrediction,
   filterRatingsNearLocation,
 } from '@/lib/utils/orderRatings';
+import { geocodeAddress, reverseGeocode } from '@/lib/utils/geocoding';
 import {
   X,
   Zap,
@@ -53,6 +54,10 @@ export function RateLocationOrderModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [timeInfo, setTimeInfo] = useState({ hour: 12, minutes: '00' });
+  const [customAddress, setCustomAddress] = useState('');
+  const [resolvedCoords, setResolvedCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [autoAddress, setAutoAddress] = useState<string | null>(currentAddress || null);
 
   const supabase = createClient();
 
@@ -78,7 +83,47 @@ export function RateLocationOrderModal({
     : 'Vị trí định vị hiện tại';
   const targetAddress = isWarehouseMode
     ? warehouse.address || 'Địa chỉ được chọn'
-    : currentAddress || (targetLat && targetLng ? `Tọa độ GPS: ${targetLat.toFixed(5)}, ${targetLng.toFixed(5)}` : 'Đang định vị GPS...');
+    : autoAddress || currentAddress || (targetLat && targetLng ? `Tọa độ GPS: ${targetLat.toFixed(5)}, ${targetLng.toFixed(5)}` : 'Đang định vị GPS...');
+
+  // Tự động tìm tên địa chỉ cho GPS khi báo đơn ở vị trí hiện tại
+  useEffect(() => {
+    if (!isWarehouseMode && currentLocation?.lat && currentLocation?.lng && !currentAddress) {
+      reverseGeocode(currentLocation.lat, currentLocation.lng).then((res) => {
+        if (res) setAutoAddress(res);
+      });
+    }
+  }, [isWarehouseMode, currentLocation, currentAddress]);
+
+  // Tra cứu địa chỉ chính xác nếu người dùng tự nhập (Debounce 700ms)
+  useEffect(() => {
+    const q = customAddress.trim();
+    if (!q || q.length < 3) {
+      setResolvedCoords(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsGeocoding(true);
+      try {
+        const results = await geocodeAddress(q);
+        if (results && results.length > 0) {
+          setResolvedCoords({
+            lat: results[0].latitude,
+            lng: results[0].longitude,
+          });
+        } else {
+          setResolvedCoords(null);
+        }
+      } catch (err) {
+        console.warn('Lỗi tra cứu địa chỉ báo đơn:', err);
+        setResolvedCoords(null);
+      } finally {
+        setIsGeocoding(false);
+      }
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [customAddress]);
 
   // Tính toán dự báo nổ đơn theo ngữ cảnh
   let relevantRatings: LocationOrderRating[] = [];
@@ -127,10 +172,33 @@ export function RateLocationOrderModal({
     setLoading(true);
     setErrorMsg(null);
 
+    let finalLat = targetLat;
+    let finalLng = targetLng;
+    let finalAddress = isWarehouseMode ? warehouse.address : autoAddress || targetAddress;
+
+    if (!isWarehouseMode && customAddress.trim()) {
+      if (resolvedCoords) {
+        finalLat = resolvedCoords.lat;
+        finalLng = resolvedCoords.lng;
+        finalAddress = customAddress.trim();
+      } else {
+        try {
+          const results = await geocodeAddress(customAddress.trim());
+          if (results && results.length > 0) {
+            finalLat = results[0].latitude;
+            finalLng = results[0].longitude;
+            finalAddress = customAddress.trim();
+          }
+        } catch (e) {
+          console.warn('Lỗi geocode trước khi lưu:', e);
+        }
+      }
+    }
+
     const res = await submitOrderRating(supabase, {
-      latitude: targetLat,
-      longitude: targetLng,
-      address: isWarehouseMode ? warehouse.address : currentAddress || `Tọa độ: ${targetLat.toFixed(5)}, ${targetLng.toFixed(5)}`,
+      latitude: finalLat,
+      longitude: finalLng,
+      address: finalAddress,
       warehouseId: isWarehouseMode ? warehouse.id : null,
       rating: selectedLevel,
       note,
@@ -197,7 +265,7 @@ export function RateLocationOrderModal({
           {/* Vị trí định vị chi tiết */}
           <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-2">
             <MapPin className="w-4 h-4 text-slate-500 shrink-0" />
-            <div className="min-w-0 text-xs">
+            <div className="min-w-0 text-xs flex-1">
               <span className="text-[10px] text-slate-400 block font-bold uppercase">
                 {isWarehouseMode ? 'Địa chỉ kho:' : 'Vị trí định vị của bạn:'}
               </span>
@@ -206,6 +274,37 @@ export function RateLocationOrderModal({
               </span>
             </div>
           </div>
+
+          {/* Bổ sung địa chỉ chính xác khi ở chế độ định vị GPS */}
+          {!isWarehouseMode && (
+            <div className="space-y-1 bg-slate-50/60 p-2.5 rounded-2xl border border-slate-200">
+              <div className="flex items-center justify-between">
+                <label className="block text-[11px] font-bold text-slate-700">
+                  Địa chỉ chính xác (Tùy chọn):
+                </label>
+                <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                  Ưu tiên số 1 🎯
+                </span>
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={customAddress}
+                  onChange={(e) => setCustomAddress(e.target.value)}
+                  placeholder={autoAddress ? `VD: ${autoAddress}` : 'VD: Số 25 ngõ 102 Nguyễn Hoàng...'}
+                  className="w-full px-3 py-2 pr-8 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+                {isGeocoding && (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600 absolute right-2.5 top-1/2 -translate-y-1/2" />
+                )}
+              </div>
+              {resolvedCoords && (
+                <span className="text-[10px] text-emerald-700 font-semibold block">
+                  ✓ Đã tìm thấy tọa độ theo địa chỉ chính xác (Ưu tiên dùng tọa độ này)
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Current Hour Prediction pill */}
           <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
