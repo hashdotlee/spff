@@ -615,7 +615,7 @@ export default function NewWarehousePage() {
           <div className="pt-1 border-t border-slate-100">
             <div className="mb-2 space-y-0.5">
               <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                Tên địa chỉ / Ghi chú bằng chữ
+                Tên kho hoặc ghi chú
               </label>
               <span className="text-[10px] text-slate-400 font-medium block">
                 (Tùy chọn)
