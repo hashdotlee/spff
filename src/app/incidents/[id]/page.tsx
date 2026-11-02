@@ -451,12 +451,12 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
         </div>
 
         {/* Action Buttons: Call & Navigation */}
-        <div className="grid grid-cols-2 gap-2.5 pt-2">
+        <div className="grid grid-cols-1 xs:grid-cols-2 gap-2.5 pt-2">
           <a
             href={`tel:${incident.phone}`}
             className="min-h-[46px] px-4 py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-2xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20"
           >
-            <Phone className="w-4 h-4" />
+            <Phone className="w-4 h-4 shrink-0" />
             <span>Gọi Cứu Hộ ({incident.phone})</span>
           </a>
 
@@ -466,15 +466,15 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
             rel="noopener noreferrer"
             className="min-h-[46px] px-4 py-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-2xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-2 shadow-md shadow-blue-600/20"
           >
-            <Navigation2 className="w-4 h-4" />
+            <Navigation2 className="w-4 h-4 shrink-0" />
             <span>Chỉ Đường G-Maps</span>
           </a>
         </div>
 
         {/* Driver Profile Summary */}
-        <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-700 font-bold text-xs flex items-center justify-center border border-orange-200">
+        <div className="pt-3 border-t border-slate-100 flex flex-col xs:flex-row xs:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-700 font-bold text-xs flex items-center justify-center border border-orange-200 shrink-0">
               {incident.user?.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -486,18 +486,18 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
                 incident.user?.full_name?.[0] || 'TX'
               )}
             </div>
-            <div>
-              <span className="text-xs font-bold text-slate-900 block">
+            <div className="min-w-0">
+              <span className="text-xs font-bold text-slate-900 block truncate">
                 {incident.user?.full_name || 'Bác tài'}
               </span>
-              <span className="text-[10px] text-slate-500">
+              <span className="text-[10px] text-slate-500 block">
                 SĐT: {incident.phone} • {new Date(incident.created_at).toLocaleTimeString('vi-VN')}
               </span>
             </div>
           </div>
 
           {incident.user?.reputation_score !== undefined && (
-            <div className="flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200">
+            <div className="flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200 shrink-0 self-start xs:self-auto">
               <Award className="w-3.5 h-3.5" />
               <span>{incident.user.reputation_score} điểm</span>
             </div>

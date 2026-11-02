@@ -222,18 +222,6 @@ export function VoiceNoteCard({
 
         {/* Action icons */}
         <div className="flex items-center gap-1 shrink-0">
-          {author && currentUserId !== note.user_id && (
-            <button
-              type="button"
-              onClick={() => setShowQRModal(true)}
-              className="min-h-[32px] px-2.5 py-1 text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl transition text-xs font-bold flex items-center gap-1.5 border border-rose-200 active:scale-95 shadow-2xs"
-              title="Cảm ơn người hướng dẫn"
-            >
-              <Heart className="w-3.5 h-3.5 fill-rose-600 text-rose-600 shrink-0" />
-              <span>Cảm ơn</span>
-            </button>
-          )}
-
           <button
             type="button"
             onClick={() => setShowReportModal(true)}
@@ -308,18 +296,6 @@ export function VoiceNoteCard({
         </span>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          {author && currentUserId !== note.user_id && (
-            <button
-              type="button"
-              onClick={() => setShowQRModal(true)}
-              className="min-h-[36px] px-2.5 py-1 rounded-xl border border-rose-200 bg-rose-50/80 hover:bg-rose-100 text-rose-700 font-bold flex items-center gap-1 transition active:scale-95"
-              title="Mời cà phê cảm ơn người hướng dẫn"
-            >
-              <Heart className="w-3.5 h-3.5 fill-rose-600 text-rose-600 shrink-0" />
-              <span className="text-[11px]">Cảm ơn</span>
-            </button>
-          )}
-
           <button
             type="button"
             onClick={() => handleVote(1)}
@@ -348,6 +324,28 @@ export function VoiceNoteCard({
         </div>
       </div>
 
+      {/* Thank you button row */}
+      {author && (
+        <div className="pt-2 border-t border-slate-100 flex flex-col xs:flex-row xs:items-center justify-between gap-2">
+          <span className="text-[11px] text-slate-500 font-medium">
+            Chỉ dẫn hữu ích với chuyến hàng của bạn?
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowQRModal(true)}
+            className="w-full xs:w-auto min-h-[34px] px-3 py-1.5 bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-2xs shrink-0"
+            title="Mời cà phê cảm ơn người hướng dẫn qua VietQR"
+          >
+            <Heart className="w-3.5 h-3.5 fill-rose-600 text-rose-600 shrink-0" />
+            <span>
+              {currentUserId === note.user_id
+                ? 'Cảm ơn người hướng dẫn (Mã của bạn)'
+                : 'Cảm ơn người hướng dẫn'}
+            </span>
+          </button>
+        </div>
+      )}
+
       {/* Thank Guide VietQR Modal */}
       {author && (
         <VietQRModal
@@ -357,12 +355,22 @@ export function VoiceNoteCard({
           bankName={author.bank_name}
           bankAccountNo={author.bank_account_no}
           bankAccountName={author.bank_account_name}
-          title="Cảm Ơn Người Hướng Dẫn"
+          title={
+            currentUserId === note.user_id
+              ? 'Mã VietQR Của Bạn'
+              : 'Cảm Ơn Người Hướng Dẫn'
+          }
           subtitle={
-            <>
-              Gửi chút cà phê cảm ơn bác tài{' '}
-              <strong className="text-orange-600">{author.full_name}</strong> vì lời chỉ dẫn hữu ích!
-            </>
+            currentUserId === note.user_id ? (
+              <>
+                Đây là mã VietQR của bạn hiển thị cho các đồng nghiệp khác khi họ cảm ơn.
+              </>
+            ) : (
+              <>
+                Gửi chút cà phê cảm ơn bác tài{' '}
+                <strong className="text-orange-600">{author.full_name}</strong> vì lời chỉ dẫn hữu ích!
+              </>
+            )
           }
           transferMessage="Cam on chi dan bac tai"
         />

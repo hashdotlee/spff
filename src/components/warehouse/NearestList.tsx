@@ -79,52 +79,49 @@ export function NearestList({
                     </div>
 
                     {wh.address && (
-                      <p className="text-xs text-slate-500 truncate mt-0.5">
+                      <p className="text-xs text-slate-600 line-clamp-2 mt-0.5 leading-relaxed">
                         {wh.address}
                       </p>
                     )}
 
-                    <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs">
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2 text-xs">
                       {wh.distance_km !== undefined && (
-                        <span className="font-extrabold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200/80 text-[11px] sm:text-xs">
+                        <span className="font-extrabold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200/80 text-[11px]">
                           {formatDistance(wh.distance_km)}
                         </span>
                       )}
 
                       {wh.image_url && (
-                        <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded text-[11px] font-bold border border-emerald-200 inline-flex items-center gap-1">
+                        <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md text-[11px] font-bold border border-emerald-200 inline-flex items-center gap-1">
                           <Camera className="w-3 h-3 text-emerald-600" />
                           <span>Ảnh thực tế</span>
                         </span>
                       )}
 
-                      <span className="text-slate-500 flex items-center gap-1 text-[11px]">
+                      <span className="text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200 text-[11px] inline-flex items-center gap-1">
                         <Volume2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span>{wh.voice_notes_count || 0} voice chỉ đường</span>
                       </span>
-
-                      {wh.creator && (
-                        <span className="text-slate-500 text-[11px] flex items-center gap-1">
-                          <span className="text-slate-400">• Ghim bởi:</span>
-                          <span className="font-semibold text-slate-700 truncate max-w-[120px]">
-                            {wh.creator.full_name}
-                          </span>
-                        </span>
-                      )}
                     </div>
 
                     {wh.creator && (
-                      <div className="mt-2">
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-col xs:flex-row xs:items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="text-[10px] text-slate-400 block font-medium">Ghim bởi:</span>
+                          <span className="text-xs font-bold text-slate-800 truncate block">
+                            {wh.creator.full_name}
+                          </span>
+                        </div>
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             setThankWh(wh);
                           }}
-                          className="min-h-[28px] px-2.5 py-1 text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition text-[11px] font-bold inline-flex items-center gap-1.5 border border-rose-200/80 active:scale-95"
-                          title="Cảm ơn người ghim kho"
+                          className="w-full xs:w-auto min-h-[32px] px-3 py-1 text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl transition text-xs font-bold inline-flex items-center justify-center gap-1.5 border border-rose-200 active:scale-95 shrink-0"
+                          title="Gửi cà phê cảm ơn người ghim kho qua VietQR"
                         >
-                          <Heart className="w-3 h-3 fill-rose-600 text-rose-600 shrink-0" />
+                          <Heart className="w-3.5 h-3.5 fill-rose-600 text-rose-600 shrink-0" />
                           <span>Cảm ơn người ghim</span>
                         </button>
                       </div>

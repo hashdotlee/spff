@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
-import { getVietQRImageUrl } from '@/lib/utils/vietqr';
-import { Copy, Check, X, Heart, CreditCard } from 'lucide-react';
+import { useState, useEffect, type ReactNode } from 'react';
+import { getVietQRImageUrl, cleanAccountNumber } from '@/lib/utils/vietqr';
+import { Copy, Check, X, Heart, CreditCard, AlertCircle } from 'lucide-react';
 
 interface VietQRModalProps {
   isOpen: boolean;
@@ -29,20 +29,30 @@ export function VietQRModal({
 }: VietQRModalProps) {
   const [copied, setCopied] = useState(false);
   const [selectedAmount, setSelectedAmount] = useState<number | undefined>(undefined);
+  const [qrLoading, setQrLoading] = useState(true);
+  const [qrError, setQrError] = useState(false);
 
-  if (!isOpen) return null;
-
-  const hasBank = !!(bankName && bankAccountNo);
+  const cleanAccount = bankAccountNo ? cleanAccountNumber(bankAccountNo) : '';
+  const hasBank = !!(bankName && cleanAccount && cleanAccount.length >= 3);
 
   const qrUrl = hasBank
     ? getVietQRImageUrl({
         bankName: bankName!,
-        accountNo: bankAccountNo!,
+        accountNo: cleanAccount,
         accountName: bankAccountName || undefined,
         amount: selectedAmount,
         message: transferMessage,
       })
     : '';
+
+  useEffect(() => {
+    if (qrUrl) {
+      setQrLoading(true);
+      setQrError(false);
+    }
+  }, [qrUrl]);
+
+  if (!isOpen) return null;
 
   function handleCopy() {
     if (!bankAccountNo) return;
@@ -109,13 +119,36 @@ export function VietQRModal({
 
             {/* QR Code Container */}
             <div className="p-2.5 sm:p-3 bg-gradient-to-b from-orange-50 to-white rounded-xl border border-orange-200 text-center">
-              <div className="inline-block p-2 bg-white rounded-xl shadow-xs border border-orange-100">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={qrUrl}
-                  alt={`VietQR ${driverName}`}
-                  className="w-48 sm:w-52 h-auto object-contain mx-auto"
-                />
+              <div className="inline-block p-2 bg-white rounded-xl shadow-xs border border-orange-100 relative min-w-[200px] min-h-[200px]">
+                {qrLoading && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 rounded-xl z-10 p-4">
+                    <div className="w-7 h-7 border-3 border-orange-500 border-t-transparent rounded-full animate-spin mb-2" />
+                    <span className="text-xs text-slate-500 font-medium">Đang tải mã VietQR...</span>
+                  </div>
+                )}
+                {qrError ? (
+                  <div className="p-4 text-center text-red-600 text-xs">
+                    <AlertCircle className="w-6 h-6 mx-auto mb-1 text-red-500" />
+                    <p className="font-semibold">Không thể tải ảnh mã QR</p>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Bạn có thể copy số tài khoản bên dưới để chuyển khoản thủ công.
+                    </p>
+                  </div>
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={qrUrl}
+                    alt={`VietQR ${driverName}`}
+                    onLoad={() => setQrLoading(false)}
+                    onError={() => {
+                      setQrLoading(false);
+                      setQrError(true);
+                    }}
+                    className={`w-48 sm:w-52 h-auto object-contain mx-auto transition-opacity duration-200 ${
+                      qrLoading ? 'opacity-0' : 'opacity-100'
+                    }`}
+                  />
+                )}
               </div>
               <p className="text-[11px] text-slate-500 mt-2 font-medium">
                 Mở app ngân hàng bất kỳ để quét mã chuyển tiền
@@ -123,28 +156,28 @@ export function VietQRModal({
             </div>
 
             {/* Account Details & Copy */}
-            <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 text-xs space-y-1.5">
-              <div className="flex justify-between items-center text-slate-600">
-                <span>Ngân hàng:</span>
-                <span className="font-bold text-slate-900">{bankName}</span>
+            <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 text-xs space-y-2">
+              <div className="flex justify-between items-center gap-2 text-slate-600">
+                <span className="shrink-0">Ngân hàng:</span>
+                <span className="font-bold text-slate-900 text-right truncate">{bankName}</span>
               </div>
               {bankAccountName && (
-                <div className="flex justify-between items-center text-slate-600">
-                  <span>Chủ tài khoản:</span>
-                  <span className="font-bold text-slate-900 uppercase">
+                <div className="flex justify-between items-center gap-2 text-slate-600">
+                  <span className="shrink-0">Chủ tài khoản:</span>
+                  <span className="font-bold text-slate-900 uppercase text-right truncate">
                     {bankAccountName}
                   </span>
                 </div>
               )}
-              <div className="flex justify-between items-center pt-1 border-t border-slate-200">
-                <span className="text-slate-600">Số tài khoản:</span>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-mono font-bold text-sm text-orange-600">
+              <div className="flex justify-between items-center pt-1.5 border-t border-slate-200 gap-2">
+                <span className="text-slate-600 shrink-0">Số tài khoản:</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-mono font-bold text-sm text-orange-600 truncate">
                     {bankAccountNo}
                   </span>
                   <button
                     onClick={handleCopy}
-                    className="p-1 text-slate-600 hover:text-orange-600 rounded-md hover:bg-slate-200 transition active:scale-95"
+                    className="p-1 text-slate-600 hover:text-orange-600 rounded-md hover:bg-slate-200 transition active:scale-95 shrink-0"
                     title="Sao chép số tài khoản"
                   >
                     {copied ? (

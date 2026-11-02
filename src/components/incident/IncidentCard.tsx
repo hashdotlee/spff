@@ -108,8 +108,8 @@ export function IncidentCard({
     <>
       <div className="bg-white rounded-2xl border border-red-200/80 hover:border-red-400 shadow-xs hover:shadow-md transition-all duration-200 overflow-hidden">
         {/* Top Header Badge */}
-        <div className="flex items-center justify-between px-3.5 sm:px-4 py-2.5 bg-gradient-to-r from-red-50 via-amber-50/50 to-white border-b border-red-100">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-1.5 px-3.5 sm:px-4 py-2.5 bg-gradient-to-r from-red-50 via-amber-50/50 to-white border-b border-red-100">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span
               className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider flex items-center gap-1 shadow-2xs ${typeInfo.badgeColor}`}
             >
@@ -133,7 +133,7 @@ export function IncidentCard({
             )}
           </div>
 
-          <div className="flex items-center gap-1 text-[11px] text-slate-500 font-medium">
+          <div className="flex items-center gap-1 text-[11px] text-slate-500 font-medium shrink-0 self-end xs:self-auto">
             <Clock className="w-3 h-3 text-slate-400" />
             <span>{formattedTime}</span>
           </div>
@@ -190,10 +190,10 @@ export function IncidentCard({
                 )}
 
                 {incident.address && (
-                  <span className="text-[11px] text-slate-500 truncate flex items-center gap-1 max-w-[200px]">
-                    <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                    <span className="truncate">{incident.address}</span>
-                  </span>
+                  <p className="text-[11px] text-slate-600 flex items-start gap-1 w-full line-clamp-2 mt-1 leading-relaxed">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                    <span>{incident.address}</span>
+                  </p>
                 )}
               </div>
 
@@ -216,37 +216,37 @@ export function IncidentCard({
           </div>
 
           {/* Action Row: Direct Call, Navigation & Help Decision */}
-          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
+          <div className="pt-2.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 w-full sm:w-auto">
               <a
                 href={`tel:${incident.phone}`}
-                className="min-h-[36px] px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
+                className="min-h-[38px] px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs"
                 title={`Gọi trực tiếp ${incident.phone}`}
               >
-                <Phone className="w-3.5 h-3.5" />
-                <span>Gọi cứu trợ</span>
+                <Phone className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Gọi ({incident.phone})</span>
               </a>
 
               <a
                 href={navUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="min-h-[36px] px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
+                className="min-h-[38px] px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs"
                 title="Dẫn đường Google Maps tới vị trí sự cố"
               >
-                <Navigation2 className="w-3.5 h-3.5" />
-                <span className="hidden xs:inline">Dẫn đường</span>
+                <Navigation2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Chỉ đường</span>
               </a>
             </div>
 
             {/* "Ai nhìn thấy có thể chọn hỗ trợ hoặc không" */}
-            <div className="flex items-center gap-1.5 ml-auto">
+            <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
               {!isOwner && incident.status !== 'resolved' && (
                 <>
                   {isHelping ? (
                     <Link
                       href={`/incidents/${incident.id}`}
-                      className="min-h-[36px] px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs active:scale-95"
+                      className="w-full sm:w-auto min-h-[38px] px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs active:scale-95"
                     >
                       <UserCheck className="w-3.5 h-3.5" />
                       <span>Bạn đang giúp</span>
@@ -257,7 +257,7 @@ export function IncidentCard({
                         <button
                           type="button"
                           onClick={() => onQuickDecline(incident.id)}
-                          className="min-h-[36px] px-2.5 py-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold transition active:scale-95"
+                          className="min-h-[38px] px-3 py-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold transition active:scale-95"
                           title="Không thể hỗ trợ sự cố này"
                         >
                           Bỏ qua
@@ -267,10 +267,10 @@ export function IncidentCard({
                       <button
                         type="button"
                         onClick={() => onOfferHelp?.(incident)}
-                        className="min-h-[36px] px-3.5 py-1.5 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm ring-2 ring-red-500/20"
+                        className="flex-1 sm:flex-initial min-h-[38px] px-3.5 py-1.5 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm ring-2 ring-red-500/20"
                       >
                         <HeartHandshake className="w-4 h-4" />
-                        <span>Tôi muốn hỗ trợ</span>
+                        <span>Hỗ trợ ngay</span>
                       </button>
                     </>
                   )}
@@ -279,7 +279,7 @@ export function IncidentCard({
 
               <Link
                 href={`/incidents/${incident.id}`}
-                className="min-h-[36px] px-2.5 py-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl text-xs font-bold transition flex items-center gap-0.5 active:scale-95"
+                className="min-h-[38px] px-2.5 py-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl text-xs font-bold transition flex items-center justify-center gap-0.5 active:scale-95 shrink-0"
               >
                 <span>Chi tiết</span>
                 <ChevronRight className="w-4 h-4 text-slate-400" />

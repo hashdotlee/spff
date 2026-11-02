@@ -209,7 +209,7 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
             </div>
 
             {/* VietQR Donate Button */}
-            <div className="mt-3.5 flex flex-wrap gap-2 justify-center sm:justify-start">
+            <div className="mt-3.5 flex flex-wrap items-center gap-2 justify-center sm:justify-start">
               <button
                 onClick={() => setShowQRModal(true)}
                 className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl text-xs font-bold shadow-md transition active:scale-95"
@@ -217,6 +217,21 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
                 <CreditCard className="w-4 h-4" />
                 <span>Mời cà phê / Quét VietQR Donate</span>
               </button>
+
+              {profile.bank_account_no && profile.bank_name ? (
+                <span className="text-[11px] text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-xl border border-slate-200 inline-flex items-center gap-1 font-mono">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>{profile.bank_name} • {profile.bank_account_no}</span>
+                </span>
+              ) : isOwner ? (
+                <Link
+                  href="/profile/edit"
+                  className="text-[11px] text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1.5 rounded-xl border border-orange-200 inline-flex items-center gap-1 font-medium transition"
+                >
+                  <AlertCircle className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                  <span>Chưa cài VietQR • Thêm ngay</span>
+                </Link>
+              ) : null}
             </div>
           </div>
         </div>
@@ -372,7 +387,7 @@ function ProfileContent({ paramsPromise }: { paramsPromise: Promise<{ id: string
                     }`}
                   >
                     {/* Header: Date + Status Badge */}
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                       <span className="text-[11px] text-slate-400">
                         Gửi lúc: {new Date(r.created_at).toLocaleString('vi-VN')}
                       </span>

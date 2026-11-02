@@ -202,17 +202,6 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
         </Link>
 
         <div className="flex items-center gap-1 sm:gap-1.5">
-          {warehouse.creator && currentUserId !== warehouse.created_by && (
-            <button
-              onClick={() => setShowPinnerQRModal(true)}
-              className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition active:scale-95 flex items-center gap-1.5 text-xs font-bold border border-rose-200 shadow-2xs"
-              title="Cảm ơn người ghim kho"
-            >
-              <Heart className="w-4 h-4 fill-rose-600 shrink-0" />
-              <span className="hidden xs:inline">Cảm ơn người ghim</span>
-            </button>
-          )}
-
           <button
             onClick={handleShare}
             className="p-2 text-slate-600 hover:text-orange-600 rounded-xl hover:bg-slate-100 transition active:scale-95 flex items-center gap-1 text-xs font-semibold"
@@ -318,11 +307,11 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
 
         {/* Pinner Info & Thank You Button */}
         {warehouse.creator ? (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-3.5 bg-gradient-to-r from-amber-50/70 via-orange-50/40 to-amber-50/70 rounded-xl border border-amber-200/70">
-            <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 bg-gradient-to-r from-amber-50/80 via-orange-50/40 to-amber-50/80 rounded-2xl border border-amber-200/80">
+            <div className="flex items-center gap-3 min-w-0">
               <Link
                 href={`/profile/${warehouse.creator.id}`}
-                className="w-10 h-10 rounded-full bg-orange-100 border border-orange-200 flex items-center justify-center text-orange-700 font-bold text-xs shrink-0 overflow-hidden active:scale-95 transition"
+                className="w-11 h-11 rounded-full bg-orange-100 border border-orange-200 flex items-center justify-center text-orange-700 font-bold text-xs shrink-0 overflow-hidden active:scale-95 transition shadow-2xs"
               >
                 {warehouse.creator.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -335,36 +324,36 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
                   warehouse.creator.full_name?.[0]?.toUpperCase() || 'TX'
                 )}
               </Link>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px] text-slate-500 font-medium">Người ghim kho:</span>
-                  <Link
-                    href={`/profile/${warehouse.creator.id}`}
-                    className="text-xs sm:text-sm font-bold text-slate-900 hover:text-orange-600 truncate transition"
-                  >
-                    {warehouse.creator.full_name}
-                  </Link>
-                </div>
-                <span className="text-[10px] text-slate-400 block -mt-0.5">
+              <div className="min-w-0 flex-1">
+                <span className="text-[11px] text-slate-500 font-medium block">Người đã ghim kho:</span>
+                <Link
+                  href={`/profile/${warehouse.creator.id}`}
+                  className="text-xs sm:text-sm font-bold text-slate-900 hover:text-orange-600 truncate block transition"
+                >
+                  {warehouse.creator.full_name}
+                </Link>
+                <span className="text-[10px] text-slate-400 block mt-0.5">
                   Đã ghim ngày {new Date(warehouse.created_at).toLocaleDateString('vi-VN')}
                 </span>
               </div>
             </div>
 
-            {currentUserId !== warehouse.created_by && (
-              <button
-                type="button"
-                onClick={() => setShowPinnerQRModal(true)}
-                className="min-h-[40px] px-3.5 py-2 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs shrink-0 self-start sm:self-center"
-                title="Gửi cà phê cảm ơn người đã ghim kho này"
-              >
-                <Heart className="w-4 h-4 fill-white shrink-0" />
-                <span>Cảm ơn người ghim</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setShowPinnerQRModal(true)}
+              className="w-full sm:w-auto min-h-[42px] px-4 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs shrink-0"
+              title="Gửi cà phê cảm ơn người đã ghim kho này qua VietQR"
+            >
+              <Heart className="w-4 h-4 fill-white shrink-0" />
+              <span>
+                {currentUserId === warehouse.created_by
+                  ? 'Cảm ơn người ghim (Mã của bạn)'
+                  : 'Cảm ơn người ghim kho'}
+              </span>
+            </button>
           </div>
         ) : (
-          <div className="text-[11px] text-slate-400 flex items-center gap-1.5 px-1">
+          <div className="text-[11px] text-slate-400 flex items-center gap-1.5 px-1 py-1">
             <span>Kho do cộng đồng bác tài SPFF đóng góp</span>
           </div>
         )}

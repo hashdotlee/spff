@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { POPULAR_BANKS, getVietQRImageUrl } from '@/lib/utils/vietqr';
+import { POPULAR_BANKS, getVietQRImageUrl, cleanAccountNumber } from '@/lib/utils/vietqr';
 import type { Profile } from '@/types/database';
 import {
   User,
@@ -33,6 +33,8 @@ export default function EditProfilePage() {
   const [bankAccountNo, setBankAccountNo] = useState('');
   const [bankAccountName, setBankAccountName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrError, setQrError] = useState(false);
 
   const supabase = createClient();
 
@@ -129,15 +131,23 @@ export default function EditProfilePage() {
     );
   }
 
+  const cleanAccount = cleanAccountNumber(bankAccountNo);
   const previewQR =
-    bankName && bankAccountNo
+    bankName && cleanAccount.length >= 3
       ? getVietQRImageUrl({
           bankName,
-          accountNo: bankAccountNo,
+          accountNo: cleanAccount,
           accountName: bankAccountName,
           message: 'Cam on dong nghiep',
         })
       : null;
+
+  useEffect(() => {
+    if (previewQR) {
+      setQrLoading(true);
+      setQrError(false);
+    }
+  }, [previewQR]);
 
   return (
     <div className="p-3 sm:p-6 max-w-xl mx-auto w-full">
@@ -243,10 +253,16 @@ export default function EditProfilePage() {
             <input
               type="text"
               value={bankAccountNo}
-              onChange={(e) => setBankAccountNo(e.target.value)}
+              onChange={(e) => setBankAccountNo(e.target.value.replace(/[\s.-]/g, ''))}
               placeholder="VD: 0988888888"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-base sm:text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none font-mono"
             />
+            {bankAccountNo.trim() && !bankName && (
+              <p className="text-[11px] text-amber-600 font-semibold mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>Vui lòng chọn ngân hàng thụ hưởng ở trên để tạo mã VietQR</span>
+              </p>
+            )}
           </div>
 
           <div>
@@ -268,14 +284,38 @@ export default function EditProfilePage() {
                 <QrCode className="w-4 h-4" />
                 <span>Xem trước mã VietQR tự động</span>
               </div>
-              <div className="inline-block p-2 bg-white rounded-lg shadow-xs border border-orange-200">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={previewQR}
-                  alt="VietQR Preview"
-                  className="w-44 sm:w-48 h-auto object-contain mx-auto"
-                />
+              <div className="inline-block p-2 bg-white rounded-lg shadow-xs border border-orange-200 relative min-w-[180px] min-h-[180px]">
+                {qrLoading && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 rounded-lg z-10 p-4">
+                    <div className="w-6 h-6 border-3 border-orange-500 border-t-transparent rounded-full animate-spin mb-1.5" />
+                    <span className="text-[11px] text-slate-500 font-medium">Đang tạo mã QR...</span>
+                  </div>
+                )}
+                {qrError ? (
+                  <div className="p-4 text-center text-red-600 text-xs">
+                    <AlertCircle className="w-6 h-6 mx-auto mb-1 text-red-500" />
+                    <p className="font-semibold">Không thể tải ảnh VietQR</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Vui lòng kiểm tra lại ngân hàng và số tài khoản.</p>
+                  </div>
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={previewQR}
+                    alt="VietQR Preview"
+                    onLoad={() => setQrLoading(false)}
+                    onError={() => {
+                      setQrLoading(false);
+                      setQrError(true);
+                    }}
+                    className={`w-44 sm:w-48 h-auto object-contain mx-auto transition-opacity duration-200 ${
+                      qrLoading ? 'opacity-0' : 'opacity-100'
+                    }`}
+                  />
+                )}
               </div>
+              <p className="text-[11px] text-slate-500 mt-2 font-medium">
+                Mã sẽ tự động cập nhật khi bạn đổi ngân hàng hoặc số tài khoản.
+              </p>
             </div>
           )}
         </div>

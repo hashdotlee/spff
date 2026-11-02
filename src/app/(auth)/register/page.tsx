@@ -50,7 +50,16 @@ function RegisterForm() {
       });
 
       if (error) {
-        setErrorMsg(error.message);
+        const lower = error.message.toLowerCase();
+        if (lower.includes('rate limit') || lower.includes('over_email_send_rate_limit')) {
+          setErrorMsg(
+            'Hệ thống đang bị giới hạn số lượng gửi email trong giờ (Email rate limit). Vui lòng báo quản trị viên tắt "Confirm email" trong Supabase hoặc thử lại sau ít phút.'
+          );
+        } else if (lower.includes('already registered')) {
+          setErrorMsg('Email này đã có người đăng ký. Vui lòng chuyển sang trang Đăng nhập.');
+        } else {
+          setErrorMsg(error.message);
+        }
         return;
       }
 
