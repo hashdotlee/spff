@@ -3,12 +3,10 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { MapPin, User, ShieldAlert, Award, Siren, ChevronDown } from 'lucide-react';
-import { useProvince } from '@/lib/contexts/ProvinceContext';
+import { MapPin, User, ShieldAlert, Award, Siren } from 'lucide-react';
 import type { Profile } from '@/types/database';
 
 export function Navbar() {
-  const { province, openPicker } = useProvince();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
@@ -140,18 +138,6 @@ export function Navbar() {
         </Link>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Global Province Selector Button */}
-          <button
-            type="button"
-            onClick={openPicker}
-            className="px-2 sm:px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 rounded-full text-[11px] sm:text-xs font-bold transition flex items-center gap-1 active:scale-95 shrink-0 max-w-[110px] xs:max-w-[140px] sm:max-w-[180px] cursor-pointer border border-slate-200/80"
-            title="Bấm để chọn tỉnh / thành phố hoạt động"
-          >
-            <MapPin className="w-3 h-3 text-orange-600 shrink-0" />
-            <span className="truncate">{province}</span>
-            <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
-          </button>
-
           {/* Quick SOS Link */}
           <Link
             href="/incidents/new"

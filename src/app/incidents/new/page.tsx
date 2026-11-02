@@ -593,38 +593,13 @@ export default function NewIncidentPage() {
       {/* 5B. ĐỊA CHỈ CHÍNH XÁC (TÙY CHỌN BỔ SUNG CHO ĐỊNH VỊ)     */}
       {/* ======================================================== */}
       <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs space-y-2">
-        <div className="flex items-center justify-between">
+        <div>
           <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
             <MapPin className="w-3.5 h-3.5 text-red-600" />
             <span>Địa chỉ chính xác hiện trường</span>
             <span className="text-[10px] text-slate-400 font-medium normal-case">(Tùy chọn)</span>
           </label>
-          <span className="text-[10px] font-extrabold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-200">
-            Ưu tiên số 1 🎯
-          </span>
         </div>
-
-        {/* Tỉnh thành đã chọn & nút đổi tỉnh */}
-        <div className="flex items-center justify-between bg-amber-50/80 border border-amber-200/90 rounded-xl px-2.5 py-1.5">
-          <div className="flex items-center gap-1.5 text-xs text-amber-950">
-            <span className="font-bold">📍 Khu vực:</span>
-            <span className="font-extrabold text-orange-700 bg-white px-2 py-0.5 rounded-md border border-amber-200 shadow-2xs">
-              {province}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={openPicker}
-            className="text-[11px] font-bold text-orange-700 hover:text-orange-900 flex items-center gap-0.5 hover:underline active:scale-95 cursor-pointer"
-          >
-            <span>Đổi tỉnh</span>
-            <ChevronDown className="w-3 h-3" />
-          </button>
-        </div>
-
-        <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-          Nhập số nhà, tên đường, ngõ ngách để hệ thống tự động gán tỉnh <strong>{province}</strong> và <strong>ưu tiên định vị theo địa chỉ đó</strong> giúp anh em cứu hộ đến nhanh nhất. Nếu để trống sẽ dùng <strong>định vị GPS</strong>.
-        </p>
 
         <div className="relative">
           <input
@@ -658,18 +633,6 @@ export default function NewIncidentPage() {
             </span>
           </button>
         )}
-
-        <div className="p-2 rounded-xl border text-xs">
-          {resolvedCoords ? (
-            <span className="text-[11px] text-emerald-800 font-bold flex items-center gap-1">
-              ✓ Đang ưu tiên định vị theo địa chỉ: {resolvedCoords.lat.toFixed(5)}, {resolvedCoords.lng.toFixed(5)}
-            </span>
-          ) : (
-            <span className="text-[11px] text-slate-600 font-medium flex items-center gap-1">
-              📡 Đang dùng định vị GPS từ điện thoại: {lat.toFixed(5)}, {lng.toFixed(5)}
-            </span>
-          )}
-        </div>
       </div>
 
       {/* ======================================================== */}

@@ -285,29 +285,10 @@ export function RateLocationOrderModal({
           {/* Bổ sung địa chỉ chính xác khi ở chế độ định vị GPS */}
           {!isWarehouseMode && (
             <div className="space-y-1.5 bg-slate-50/60 p-2.5 rounded-2xl border border-slate-200">
-              <div className="flex items-center justify-between">
+              <div>
                 <label className="block text-[11px] font-bold text-slate-700">
                   Địa chỉ chính xác (Tùy chọn):
                 </label>
-                <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
-                  Ưu tiên số 1 🎯
-                </span>
-              </div>
-
-              {/* Tỉnh thành đã chọn & nút đổi tỉnh */}
-              <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-2 py-1">
-                <div className="flex items-center gap-1 text-[11px] text-slate-700">
-                  <span className="font-semibold">📍 Khu vực:</span>
-                  <span className="font-bold text-orange-600">{province}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={openPicker}
-                  className="text-[10px] font-bold text-orange-600 hover:text-orange-800 flex items-center gap-0.5 cursor-pointer"
-                >
-                  <span>Đổi tỉnh</span>
-                  <ChevronDown className="w-3 h-3" />
-                </button>
               </div>
 
               <div className="relative">

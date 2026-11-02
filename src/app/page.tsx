@@ -9,6 +9,7 @@ import { calculateHaversineDistance, formatDistance } from '@/lib/utils/distance
 import { NearestList } from '@/components/warehouse/NearestList';
 import { RateLocationOrderModal } from '@/components/warehouse/RateLocationOrderModal';
 import { fetchOrderRatings, calculateOrderPrediction, filterRatingsNearLocation } from '@/lib/utils/orderRatings';
+import { useProvince } from '@/lib/contexts/ProvinceContext';
 import {
   MapPin,
   PlusCircle,
@@ -17,6 +18,7 @@ import {
   Search,
   Siren,
   ChevronRight,
+  ChevronDown,
   Building2,
   UtensilsCrossed,
   Home,
@@ -35,6 +37,7 @@ const MapView = dynamic(() => import('@/components/map/MapView'), {
 });
 
 export default function HomePage() {
+  const { province, openPicker } = useProvince();
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number }>({
     lat: 21.0285,
     lng: 105.8542,
@@ -250,26 +253,40 @@ export default function HomePage() {
 
   return (
     <div className="p-3 sm:p-6 space-y-3 sm:space-y-4 max-w-2xl mx-auto w-full">
-      {/* Top action bar: Search & Fast Add */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+      {/* Top action bar: Province Picker, Search & Fast Add */}
+      <div className="flex items-center gap-1.5 sm:gap-2">
+        {/* Nút chọn Tỉnh / Thành phố */}
+        <button
+          type="button"
+          onClick={openPicker}
+          className="px-2.5 py-2.5 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-bold transition flex items-center gap-1 border border-slate-200 shadow-2xs active:scale-95 shrink-0 cursor-pointer"
+          title="Bấm để chọn tỉnh / thành phố hoạt động"
+        >
+          <MapPin className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+          <span className="max-w-[75px] xs:max-w-[110px] sm:max-w-[150px] truncate font-bold text-slate-900">
+            {province}
+          </span>
+          <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+        </button>
+
+        <div className="relative flex-1 min-w-0">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm tên kho, bến bãi, quán ăn, địa chỉ..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-xs"
+            placeholder="Tìm kho, bến bãi, địa chỉ..."
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-2xs"
           />
         </div>
 
         <Link
           href="/warehouse/new"
-          className="py-2.5 px-3 sm:px-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm shrink-0 active:scale-95"
+          className="py-2.5 px-2.5 sm:px-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm shrink-0 active:scale-95"
           title="Ghim địa chỉ mới"
         >
-          <PlusCircle className="w-4 h-4" />
-          <span className="hidden xs:inline">Ghim địa chỉ</span>
+          <PlusCircle className="w-4 h-4 shrink-0" />
+          <span className="hidden sm:inline">Ghim</span>
         </Link>
       </div>
 

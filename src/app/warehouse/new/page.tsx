@@ -640,45 +640,12 @@ export default function NewWarehousePage() {
 
           {/* Địa chỉ chính xác (Tùy chọn bổ sung cho định vị) */}
           <div className="pt-2 border-t border-slate-100">
-            <div className="mb-2 space-y-1">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-orange-600" />
-                  <span>Địa chỉ chính xác</span>
-                  <span className="text-[10px] text-slate-400 font-medium normal-case">(Tùy chọn)</span>
-                </label>
-                <span className="text-[10px] font-extrabold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
-                  Ưu tiên số 1 🎯
-                </span>
-              </div>
-
-              {/* Tỉnh thành đã chọn & nút đổi tỉnh */}
-              <div className="flex items-center justify-between bg-amber-50/80 border border-amber-200/90 rounded-xl px-2.5 py-1.5">
-                <div className="flex items-center gap-1.5 text-xs text-amber-950">
-                  <span className="font-bold">📍 Tỉnh / Thành:</span>
-                  <span className="font-extrabold text-orange-700 bg-white px-2 py-0.5 rounded-md border border-amber-200 shadow-2xs">
-                    {province}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={openPicker}
-                  className="text-[11px] font-bold text-orange-700 hover:text-orange-900 flex items-center gap-0.5 hover:underline active:scale-95 cursor-pointer"
-                >
-                  <span>Đổi tỉnh</span>
-                  <ChevronDown className="w-3 h-3" />
-                </button>
-              </div>
-
-              {/* Hướng dẫn thân thiện dành cho tài xế khi ở nhà */}
-              <div className="p-2.5 bg-blue-50/80 border border-blue-200/80 rounded-xl text-[11px] text-blue-900 leading-relaxed">
-                <p className="font-bold flex items-center gap-1 text-blue-950">
-                  <span>💡 Dành cho bác tài ghim khi đang ở nhà:</span>
-                </p>
-                <p className="text-blue-800 text-[10.5px] mt-0.5">
-                  Chỉ cần nhập <strong>số nhà, tên đường, phường/xã</strong> hoặc <strong>quận/huyện cũ</strong>. Hệ thống tự động gán tỉnh <strong>{province}</strong> và ưu tiên định vị theo địa chỉ đó (không cần đứng tận nơi như GPS).
-                </p>
-              </div>
+            <div className="mb-1.5">
+              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-orange-600" />
+                <span>Địa chỉ chính xác</span>
+                <span className="text-[10px] text-slate-400 font-medium normal-case">(Tùy chọn)</span>
+              </label>
             </div>
 
             <div className="relative">
@@ -727,41 +694,6 @@ export default function NewWarehousePage() {
                 </span>
               </button>
             )}
-
-            {/* Trạng thái định vị thực tế đang được áp dụng */}
-            <div className="mt-2.5 p-2.5 rounded-2xl border text-xs transition">
-              {resolvedAddressCoords ? (
-                <div className="flex items-start gap-2 bg-emerald-50/70 p-2 rounded-xl text-emerald-800 border border-emerald-200/80">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <span className="font-extrabold text-[11px] block text-emerald-900">
-                      🎯 Đang ưu tiên định vị theo địa chỉ chính xác
-                    </span>
-                    <span className="text-[10px] text-emerald-700 block truncate">
-                      {resolvedAddressCoords.displayName}
-                    </span>
-                    <span className="text-[9px] text-emerald-600 font-mono mt-0.5 block">
-                      Tọa độ: {resolvedAddressCoords.lat.toFixed(5)}, {resolvedAddressCoords.lng.toFixed(5)}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-start gap-2 bg-blue-50/70 p-2 rounded-xl text-blue-800 border border-blue-200/80">
-                  <Navigation2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <span className="font-extrabold text-[11px] block text-blue-900">
-                      📡 Đang dùng định vị GPS từ thiết bị
-                    </span>
-                    <span className="text-[10px] text-blue-700 block truncate">
-                      {autoReverseAddress || 'Tọa độ thực tế từ cảm biến điện thoại'}
-                    </span>
-                    <span className="text-[9px] text-blue-600 font-mono mt-0.5 block">
-                      Tọa độ GPS: {lat.toFixed(5)}, {lng.toFixed(5)}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
 
           {/* Submit Button (Đăng luôn) */}
