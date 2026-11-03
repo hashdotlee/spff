@@ -94,6 +94,45 @@ CREATE TRIGGER on_incident_helper_changed
   AFTER INSERT OR UPDATE OR DELETE ON public.incident_helpers
   FOR EACH ROW EXECUTE PROCEDURE public.handle_incident_helper_change();
 
+-- 4.1 Trigger kiểm tra: Mỗi sự cố chỉ cho phép 1 người nhận cứu hộ (người sau không thể nhận đè)
+CREATE OR REPLACE FUNCTION public.check_incident_single_helper()
+RETURNS trigger AS $$
+DECLARE
+    existing_helpers_count INT;
+    incident_current_status TEXT;
+BEGIN
+    IF NEW.status IN ('offered', 'accepted') THEN
+        SELECT status INTO incident_current_status
+        FROM public.incidents
+        WHERE id = NEW.incident_id;
+
+        IF incident_current_status = 'resolved' THEN
+            RAISE EXCEPTION 'Sự cố này đã được cứu hộ xong!';
+        ELSIF incident_current_status = 'cancelled' THEN
+            RAISE EXCEPTION 'Sự cố này đã bị hủy!';
+        END IF;
+
+        SELECT COUNT(*)
+        INTO existing_helpers_count
+        FROM public.incident_helpers
+        WHERE incident_id = NEW.incident_id
+          AND helper_id != NEW.helper_id
+          AND status IN ('offered', 'accepted');
+
+        IF existing_helpers_count >= 1 THEN
+            RAISE EXCEPTION 'Sự cố này đã có một đồng nghiệp khác nhận hỗ trợ rồi!';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_check_incident_single_helper ON public.incident_helpers;
+CREATE TRIGGER trg_check_incident_single_helper
+  BEFORE INSERT OR UPDATE ON public.incident_helpers
+  FOR EACH ROW EXECUTE PROCEDURE public.check_incident_single_helper();
+
 -- 5. Row Level Security (RLS) Policies
 ALTER TABLE public.incidents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.incident_helpers ENABLE ROW LEVEL SECURITY;

@@ -9,6 +9,7 @@ import { calculateHaversineDistance, formatDistance } from '@/lib/utils/distance
 import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
 import { getIncidentTypeInfo } from '@/components/incident/IncidentCard';
 import { OfferHelpModal } from '@/components/incident/OfferHelpModal';
+import { VietQRModal } from '@/components/donation/VietQRModal';
 import {
   ArrowLeft,
   Phone,
@@ -29,6 +30,7 @@ import {
   Award,
   Play,
   Pause,
+  Coffee,
 } from 'lucide-react';
 
 function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
@@ -47,6 +49,7 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
   const [copiedLink, setCopiedLink] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [thankingHelper, setThankingHelper] = useState<any | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const supabase = createClient();
@@ -107,6 +110,25 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
   useEffect(() => {
     loadData();
 
+    // Lắng nghe thay đổi realtime cho sự cố này
+    const channel = supabase
+      .channel(`incident_detail_${incidentId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'incidents', filter: `id=eq.${incidentId}` },
+        () => {
+          loadData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'incident_helpers', filter: `incident_id=eq.${incidentId}` },
+        () => {
+          loadData();
+        }
+      )
+      .subscribe();
+
     // Get driver GPS
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -120,6 +142,10 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
         { enableHighAccuracy: false, timeout: 6000 }
       );
     }
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [incidentId]);
 
   // Compute distance
@@ -138,6 +164,18 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
     if (!currentUserId) {
       router.push(`/login?redirectTo=/incidents/${incidentId}`);
       return;
+    }
+
+    // Kiểm tra xem đã có đồng nghiệp khác nhận giúp trước chưa
+    const { data: latestInc } = await supabase
+      .from('incidents')
+      .select('status, helper_count')
+      .eq('id', incidentId)
+      .maybeSingle();
+
+    if (latestInc && (latestInc.helper_count > 0 || latestInc.status !== 'open')) {
+      await loadData();
+      throw new Error('Đã có một đồng nghiệp khác nhanh tay nhận hỗ trợ sự cố này rồi! Cảm ơn tinh thần tương trợ của bạn.');
     }
 
     const { error } = await supabase.from('incident_helpers').upsert(
@@ -203,6 +241,12 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
       await loadData();
       setStatusMsg('Chúc mừng! Sự cố đã được xử lý an toàn.');
       setTimeout(() => setStatusMsg(null), 5000);
+
+      // Nếu là người được giúp và có người đã hỗ trợ, mở modal mời cà phê cảm ơn
+      const helperToThank = helpers.find((h) => h.status !== 'cancelled')?.helper || helpers[0]?.helper;
+      if (isOwner && helperToThank) {
+        setThankingHelper(helperToThank);
+      }
     } catch (err) {
       console.error('Lỗi đóng sự cố:', err);
     } finally {
@@ -505,6 +549,38 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
         </div>
       </div>
 
+      {/* Thank you banner cho Người được giúp sau khi được giúp */}
+      {isOwner && helpers.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-emerald-50 rounded-3xl p-4 sm:p-5 border border-orange-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-xs shrink-0">
+              <Coffee className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-slate-900">
+                {incident.status === 'resolved'
+                  ? 'Cứu hộ thành công! Mời cafe cảm ơn đồng nghiệp 🎉'
+                  : 'Đang có đồng nghiệp hỗ trợ! Mời cafe cảm ơn ☕'}
+              </h4>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Bác tài <strong>{helpers[0]?.helper?.full_name || 'đồng nghiệp'}</strong> đã nhiệt tình tương trợ bạn trên đường. Hãy chuyển khoản ly cà phê để tri ân nhé!
+              </p>
+            </div>
+          </div>
+
+          {helpers[0]?.helper && (
+            <button
+              type="button"
+              onClick={() => setThankingHelper(helpers[0].helper)}
+              className="py-2.5 px-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 active:scale-95 text-white rounded-2xl text-xs sm:text-sm font-black shadow-md shadow-orange-500/20 transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <Coffee className="w-4 h-4" />
+              <span>Chuyển khoản mời cafe ☕</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* CORE FEATURE: "Ai nhìn thấy có thể chọn hỗ trợ hoặc không" */}
       {!isOwner && incident.status !== 'resolved' && (
         <div className="bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 rounded-3xl p-4 sm:p-5 border border-orange-200 shadow-sm space-y-3">
@@ -560,8 +636,28 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
                 </button>
               </div>
             </div>
+          ) : (incident.helper_count || 0) > 0 || incident.status === 'helping' ? (
+            /* Nếu đã có 1 người nhận giúp rồi -> Người sau không thấy nút nhận hỗ trợ */
+            <div className="p-4 bg-white/95 rounded-2xl border border-amber-300 shadow-xs space-y-2 text-slate-700">
+              <div className="flex items-center gap-2 font-black text-amber-800 text-xs sm:text-sm">
+                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Sự cố này đã có đồng nghiệp nhận hỗ trợ!</span>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Đã có một bác tài nhận trợ giúp và đang trên đường tiếp ứng. Sự cố này hiện đã đóng tiếp nhận thêm người giúp. Cảm ơn tinh thần tương trợ của bạn!
+              </p>
+              <div className="pt-1">
+                <Link
+                  href="/incidents"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition active:scale-95"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Quay lại danh sách cứu hộ khác</span>
+                </Link>
+              </div>
+            </div>
           ) : (
-            /* User has not yet volunteered */
+            /* User has not yet volunteered and nobody took it yet */
             <div className="flex items-center gap-2.5 pt-1">
               <button
                 type="button"
@@ -671,15 +767,30 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
                     </div>
                   </div>
 
-                  {helperProfile?.phone && (
-                    <a
-                      href={`tel:${helperProfile.phone}`}
-                      className="self-end sm:self-center px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 active:scale-95 shadow-2xs"
-                    >
-                      <Phone className="w-3 h-3" />
-                      <span>Gọi ngay ({helperProfile.phone})</span>
-                    </a>
-                  )}
+                  <div className="flex items-center gap-2 self-end sm:self-center">
+                    {/* Nút mời cafe cảm ơn người đã giúp mình */}
+                    {isOwner && helperProfile && (
+                      <button
+                        type="button"
+                        onClick={() => setThankingHelper(helperProfile)}
+                        className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 active:scale-95 shadow-2xs cursor-pointer"
+                        title="Chuyển khoản mời ly cafe cảm ơn đồng nghiệp"
+                      >
+                        <Coffee className="w-3.5 h-3.5" />
+                        <span>Mời cafe ☕</span>
+                      </button>
+                    )}
+
+                    {helperProfile?.phone && (
+                      <a
+                        href={`tel:${helperProfile.phone}`}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 active:scale-95 shadow-2xs"
+                      >
+                        <Phone className="w-3 h-3" />
+                        <span>Gọi ({helperProfile.phone})</span>
+                      </a>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -694,6 +805,25 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
         onClose={() => setShowOfferModal(false)}
         onSubmit={handleOfferHelpSubmit}
       />
+
+      {/* VietQR Modal to Thank & Tip Helper */}
+      {thankingHelper && (
+        <VietQRModal
+          isOpen={Boolean(thankingHelper)}
+          onClose={() => setThankingHelper(null)}
+          driverName={thankingHelper.full_name || 'Đồng nghiệp'}
+          bankName={thankingHelper.bank_name}
+          bankAccountNo={thankingHelper.bank_account_no}
+          bankAccountName={thankingHelper.bank_account_name}
+          title="Mời Cà Phê Cảm Ơn Đồng Nghiệp ☕"
+          subtitle={
+            <>
+              Gửi chút cà phê cảm ơn bác tài <strong className="text-orange-600">{thankingHelper.full_name}</strong> đã nhiệt tình hỗ trợ bạn!
+            </>
+          }
+          transferMessage="Cam on bac tai da cuu ho"
+        />
+      )}
 
       {/* Fullscreen Photo Lightbox */}
       {showPhotoModal && (

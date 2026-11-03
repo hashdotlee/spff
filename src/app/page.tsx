@@ -44,6 +44,7 @@ export default function HomePage() {
   });
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [orderRatings, setOrderRatings] = useState<LocationOrderRating[]>([]);
@@ -145,12 +146,20 @@ export default function HomePage() {
   // 3. Fetch active incidents (sự cố đang cần hỗ trợ)
   async function loadIncidents() {
     try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        setCurrentUserId(user.id);
+      }
+
       const { data, error } = await supabase
         .from('incidents')
-        .select(`*, user:profiles(*)`)
+        .select(`*, user:profiles(*), helpers:incident_helpers(*, helper:profiles(*))`)
         .in('status', ['open', 'helping'])
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(30);
 
       if (!error && data) {
         setIncidents(data);
@@ -176,21 +185,59 @@ export default function HomePage() {
     loadWarehouses();
     loadIncidents();
     loadOrderRatings();
+
+    // Lắng nghe thay đổi sự cố realtime trên bản đồ
+    const channel = supabase
+      .channel('home_incidents_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'incidents' },
+        () => {
+          loadIncidents();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'incident_helpers' },
+        () => {
+          loadIncidents();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  // 4. Compute distances using Haversine formula and sort
-  const computedIncidents = incidents.map((inc) => {
-    let distance_km = 0;
-    if (userLocation) {
-      distance_km = calculateHaversineDistance(
-        userLocation.lat,
-        userLocation.lng,
-        inc.latitude,
-        inc.longitude
+  // 4. Compute distances and filter:
+  // QUY TẮC: Nếu có 1 người nhận giúp rồi thì người sau sẽ không thấy phần cứu hộ đó nữa
+  const computedIncidents = incidents
+    .filter((inc) => {
+      const isOwner = Boolean(currentUserId && inc.user_id === currentUserId);
+      const isHelper = Boolean(
+        currentUserId && inc.helpers?.some((h) => h.helper_id === currentUserId && h.status !== 'cancelled')
       );
-    }
-    return { ...inc, distance_km };
-  });
+      const isAlreadyTaken = (inc.helper_count || 0) > 0 || inc.status === 'helping';
+
+      // Ẩn với người sau nếu đã có người nhận giúp
+      if (isAlreadyTaken && !isOwner && !isHelper) {
+        return false;
+      }
+      return inc.status !== 'resolved';
+    })
+    .map((inc) => {
+      let distance_km = 0;
+      if (userLocation) {
+        distance_km = calculateHaversineDistance(
+          userLocation.lat,
+          userLocation.lng,
+          inc.latitude,
+          inc.longitude
+        );
+      }
+      return { ...inc, distance_km };
+    });
 
   const nearbyIncidents = computedIncidents.filter((inc) => (inc.distance_km || 0) <= 25);
 

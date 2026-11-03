@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import type { Incident } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
-import { HeartHandshake, Clock, MessageSquare, X, Check, Phone } from 'lucide-react';
+import { HeartHandshake, Clock, MessageSquare, X, Check, Phone, Coffee } from 'lucide-react';
 import { formatDistance } from '@/lib/utils/distance';
 
 interface OfferHelpModalProps {
@@ -22,6 +22,7 @@ export function OfferHelpModal({
   const [eta, setEta] = useState<number>(10);
   const [message, setMessage] = useState('');
   const [helperPhone, setHelperPhone] = useState('');
+  const [hasBank, setHasBank] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -32,12 +33,13 @@ export function OfferHelpModal({
         if (data?.user) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('phone')
+            .select('phone, bank_account_no')
             .eq('id', data.user.id)
             .maybeSingle();
           if (profile?.phone) {
             setHelperPhone(profile.phone);
           }
+          setHasBank(Boolean(profile?.bank_account_no && profile.bank_account_no.trim().length >= 3));
         }
       });
     }
@@ -224,6 +226,15 @@ export function OfferHelpModal({
               ))}
             </div>
           </div>
+
+          {!hasBank && (
+            <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-800 flex items-center gap-2">
+              <Coffee className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                💡 Bác tài chưa cài tài khoản ngân hàng trong Hồ sơ. Hãy bổ sung sau để người được cứu hộ có thể chuyển khoản mời cafe cảm ơn nhé!
+              </span>
+            </div>
+          )}
 
           {/* Action Buttons: Confirm or Decline */}
           <div className="pt-2 flex items-center gap-2">

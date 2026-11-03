@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import type { Incident, IncidentType } from '@/types/database';
+import type { Incident, IncidentType, Profile } from '@/types/database';
 import { formatDistance } from '@/lib/utils/distance';
 import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
 import {
@@ -21,6 +21,7 @@ import {
   Maximize2,
   X,
   HeartHandshake,
+  Coffee,
 } from 'lucide-react';
 
 interface IncidentCardProps {
@@ -28,6 +29,7 @@ interface IncidentCardProps {
   currentUserId?: string | null;
   onOfferHelp?: (incident: Incident) => void;
   onQuickDecline?: (incidentId: string) => void;
+  onThankHelper?: (helper: Profile) => void;
 }
 
 export function getIncidentTypeInfo(type: IncidentType) {
@@ -88,13 +90,18 @@ export function IncidentCard({
   currentUserId,
   onOfferHelp,
   onQuickDecline,
+  onThankHelper,
 }: IncidentCardProps) {
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const typeInfo = getIncidentTypeInfo(incident.incident_type);
   const IconComponent = typeInfo.icon;
   const navUrl = getGoogleMapsNavigationUrl(incident.latitude, incident.longitude, incident.address);
-  const isOwner = currentUserId && incident.user_id === currentUserId;
+  const isOwner = Boolean(currentUserId && incident.user_id === currentUserId);
   const isHelping = Boolean(incident.current_user_helper);
+
+  // Người nhận hỗ trợ chính (nếu có)
+  const activeHelperEntry = (incident.helpers || []).find((h) => h.status !== 'cancelled');
+  const primaryHelper = activeHelperEntry?.helper || incident.helpers?.[0]?.helper || null;
 
   const formattedTime = new Date(incident.created_at).toLocaleTimeString('vi-VN', {
     hour: '2-digit',
@@ -212,6 +219,22 @@ export function IncidentCard({
                   </span>
                 )}
               </div>
+
+              {/* Helper info (nếu đã có người nhận giúp) */}
+              {primaryHelper && (
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600">
+                  <span className="text-blue-700 font-bold flex items-center gap-1">
+                    <UserCheck className="w-3 h-3" />
+                    <span>Người nhận giúp:</span>
+                  </span>
+                  <span className="font-bold text-slate-900">{primaryHelper.full_name || 'Bác tài'}</span>
+                  {primaryHelper.phone && (
+                    <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-[10px]">
+                      📞 {primaryHelper.phone}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -239,8 +262,21 @@ export function IncidentCard({
               </a>
             </div>
 
-            {/* "Ai nhìn thấy có thể chọn hỗ trợ hoặc không" */}
+            {/* "Ai nhìn thấy có thể chọn hỗ trợ hoặc không, người được giúp có thể mời cafe" */}
             <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
+              {/* Người được giúp có thể mời cafe đồng nghiệp đã giúp mình */}
+              {isOwner && primaryHelper && (
+                <button
+                  type="button"
+                  onClick={() => onThankHelper?.(primaryHelper)}
+                  className="min-h-[38px] px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                  title="Chuyển khoản mời ly cafe cảm ơn người đã giúp đỡ"
+                >
+                  <Coffee className="w-3.5 h-3.5" />
+                  <span>Mời cafe ☕</span>
+                </button>
+              )}
+
               {!isOwner && incident.status !== 'resolved' && (
                 <>
                   {isHelping ? (
@@ -253,25 +289,30 @@ export function IncidentCard({
                     </Link>
                   ) : (
                     <>
-                      {onQuickDecline && (
-                        <button
-                          type="button"
-                          onClick={() => onQuickDecline(incident.id)}
-                          className="min-h-[38px] px-3 py-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold transition active:scale-95"
-                          title="Không thể hỗ trợ sự cố này"
-                        >
-                          Bỏ qua
-                        </button>
-                      )}
+                      {/* Nếu chưa có ai nhận giúp thì mới hiện nút Hỗ trợ ngay */}
+                      {incident.helper_count === 0 && incident.status === 'open' && (
+                        <>
+                          {onQuickDecline && (
+                            <button
+                              type="button"
+                              onClick={() => onQuickDecline(incident.id)}
+                              className="min-h-[38px] px-3 py-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold transition active:scale-95"
+                              title="Không thể hỗ trợ sự cố này"
+                            >
+                              Bỏ qua
+                            </button>
+                          )}
 
-                      <button
-                        type="button"
-                        onClick={() => onOfferHelp?.(incident)}
-                        className="flex-1 sm:flex-initial min-h-[38px] px-3.5 py-1.5 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm ring-2 ring-red-500/20"
-                      >
-                        <HeartHandshake className="w-4 h-4" />
-                        <span>Hỗ trợ ngay</span>
-                      </button>
+                          <button
+                            type="button"
+                            onClick={() => onOfferHelp?.(incident)}
+                            className="flex-1 sm:flex-initial min-h-[38px] px-3.5 py-1.5 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm ring-2 ring-red-500/20"
+                          >
+                            <HeartHandshake className="w-4 h-4" />
+                            <span>Hỗ trợ ngay</span>
+                          </button>
+                        </>
+                      )}
                     </>
                   )}
                 </>

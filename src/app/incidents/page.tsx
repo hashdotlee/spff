@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import type { Incident, IncidentType } from '@/types/database';
+import type { Incident, IncidentType, Profile } from '@/types/database';
 import { calculateHaversineDistance } from '@/lib/utils/distance';
 import { IncidentCard } from '@/components/incident/IncidentCard';
 import { OfferHelpModal } from '@/components/incident/OfferHelpModal';
+import { VietQRModal } from '@/components/donation/VietQRModal';
 import {
   Siren,
   PlusCircle,
@@ -22,6 +23,7 @@ import {
   HelpCircle,
   ShieldCheck,
   Search,
+  Coffee,
 } from 'lucide-react';
 
 export default function IncidentsPage() {
@@ -37,6 +39,7 @@ export default function IncidentsPage() {
 
   // Modal offer help state
   const [offeringIncident, setOfferingIncident] = useState<Incident | null>(null);
+  const [thankingHelper, setThankingHelper] = useState<Profile | null>(null);
   const [dbTableMissing, setDbTableMissing] = useState(false);
 
   const supabase = createClient();
@@ -114,11 +117,46 @@ export default function IncidentsPage() {
   useEffect(() => {
     requestLocation();
     loadIncidents();
+
+    // Lắng nghe thay đổi realtime (người khác nhận giúp / giải quyết sự cố)
+    const channel = supabase
+      .channel('incidents_feed_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'incidents' },
+        () => {
+          loadIncidents();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'incident_helpers' },
+        () => {
+          loadIncidents();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Handle Offer Help Submission
   async function handleOfferHelpSubmit(etaMinutes: number, message: string) {
     if (!offeringIncident || !currentUserId) return;
+
+    // Kiểm tra xem đã có người khác nhanh tay nhận giúp trước chưa
+    const { data: latestInc } = await supabase
+      .from('incidents')
+      .select('status, helper_count')
+      .eq('id', offeringIncident.id)
+      .maybeSingle();
+
+    if (latestInc && (latestInc.helper_count > 0 || latestInc.status !== 'open')) {
+      await loadIncidents();
+      throw new Error('Đã có một đồng nghiệp khác nhanh tay nhận hỗ trợ sự cố này rồi! Cảm ơn tinh thần tương trợ của bạn.');
+    }
 
     const { error } = await supabase.from('incident_helpers').upsert(
       {
@@ -166,6 +204,15 @@ export default function IncidentsPage() {
       return (a.distance_km || 0) - (b.distance_km || 0);
     })
     .filter((inc) => {
+      const isOwner = Boolean(currentUserId && inc.user_id === currentUserId);
+      const isHelper = Boolean(inc.current_user_helper);
+      const isAlreadyTaken = (inc.helper_count || 0) > 0 || inc.status === 'helping';
+
+      // QUY TẮC CỐT LÕI: Nếu đã có 1 người nhận giúp rồi thì người sau sẽ không thấy phần cứu hộ đó nữa
+      if (isAlreadyTaken && !isOwner && !isHelper) {
+        return false;
+      }
+
       // Tab filter
       if (activeTab === 'near') {
         return (inc.distance_km || 0) <= 15 && inc.status !== 'resolved';
@@ -390,6 +437,7 @@ export default function IncidentsPage() {
               currentUserId={currentUserId}
               onOfferHelp={(incident) => setOfferingIncident(incident)}
               onQuickDecline={(id) => handleQuickDecline(id)}
+              onThankHelper={(helper) => setThankingHelper(helper)}
             />
           ))}
         </div>
@@ -402,6 +450,25 @@ export default function IncidentsPage() {
         onClose={() => setOfferingIncident(null)}
         onSubmit={handleOfferHelpSubmit}
       />
+
+      {/* VietQR Modal to Thank & Tip Helper */}
+      {thankingHelper && (
+        <VietQRModal
+          isOpen={Boolean(thankingHelper)}
+          onClose={() => setThankingHelper(null)}
+          driverName={thankingHelper.full_name || 'Đồng nghiệp'}
+          bankName={thankingHelper.bank_name}
+          bankAccountNo={thankingHelper.bank_account_no}
+          bankAccountName={thankingHelper.bank_account_name}
+          title="Mời Cà Phê Cảm Ơn Đồng Nghiệp ☕"
+          subtitle={
+            <>
+              Gửi chút cà phê cảm ơn bác tài <strong className="text-orange-600">{thankingHelper.full_name}</strong> đã nhiệt tình hỗ trợ bạn!
+            </>
+          }
+          transferMessage="Cam on bac tai da cuu ho"
+        />
+      )}
     </div>
   );
 }
