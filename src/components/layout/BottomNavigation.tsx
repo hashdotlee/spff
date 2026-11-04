@@ -9,7 +9,63 @@ import { createClient } from '@/lib/supabase/client';
 export function BottomNavigation() {
   const pathname = usePathname();
   const [userId, setUserId] = useState<string | null>(null);
+  const [unreadFeedsCount, setUnreadFeedsCount] = useState<number>(0);
   const supabase = createClient();
+
+  // Kiểm tra tin nhắn mới chưa đọc khi không ở trang /feeds
+  useEffect(() => {
+    async function checkUnread() {
+      if (pathname.startsWith('/feeds')) {
+        try {
+          localStorage.setItem('spff_feeds_last_read', new Date().toISOString());
+        } catch (_) {}
+        setUnreadFeedsCount(0);
+        return;
+      }
+
+      try {
+        let lastRead = '';
+        try {
+          lastRead =
+            localStorage.getItem('spff_feeds_last_read') ||
+            new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        } catch (_) {
+          lastRead = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        }
+
+        const { count, error } = await supabase
+          .from('posts')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'active')
+          .gt('created_at', lastRead);
+
+        if (!error && typeof count === 'number') {
+          setUnreadFeedsCount(count);
+        }
+      } catch (err) {
+        console.warn('Lỗi kiểm tra tin chưa đọc:', err);
+      }
+    }
+
+    checkUnread();
+
+    const channel = supabase
+      .channel('bottom_nav_unread_feeds')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'posts' },
+        () => {
+          if (!pathname.startsWith('/feeds')) {
+            setUnreadFeedsCount((prev) => prev + 1);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [pathname]);
 
   useEffect(() => {
     supabase.auth.getUser().then((res: any) => {
@@ -80,7 +136,7 @@ export function BottomNavigation() {
               }`}
             >
               <div
-                className={`flex items-center justify-center rounded-full transition-transform ${
+                className={`relative flex items-center justify-center rounded-full transition-transform ${
                   item.highlight
                     ? 'w-11 h-11 -mt-6 bg-gradient-to-tr from-orange-600 to-amber-500 text-white shadow-lg shadow-orange-500/30 border-2 border-white ring-2 ring-orange-500/20'
                     : 'w-6 h-6'
@@ -93,9 +149,13 @@ export function BottomNavigation() {
                 }`}
               >
                 <Icon className={item.highlight ? 'w-6 h-6' : 'w-5 h-5'} />
+                {/* Chỉ số màu đỏ khi có tin nhắn bảng tin chưa đọc */}
+                {item.href === '/feeds' && unreadFeedsCount > 0 && !item.isActive && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-600 rounded-full border border-white ring-1 ring-red-400 animate-pulse" />
+                )}
               </div>
               <span
-                className={`text-[10px] tracking-tight mt-1 ${
+                className={`text-[10px] tracking-tight mt-1 flex items-center gap-1 ${
                   item.highlight
                     ? 'font-bold text-orange-600 -mt-0.5'
                     : item.isActive && item.isSos
@@ -103,7 +163,12 @@ export function BottomNavigation() {
                     : ''
                 }`}
               >
-                {item.label}
+                <span>{item.label}</span>
+                {item.href === '/feeds' && unreadFeedsCount > 0 && !item.isActive && (
+                  <span className="px-1 py-0.2 bg-red-600 text-white text-[8px] font-black rounded-full leading-none shadow-2xs">
+                    {unreadFeedsCount > 9 ? '9+' : unreadFeedsCount}
+                  </span>
+                )}
               </span>
             </Link>
           );

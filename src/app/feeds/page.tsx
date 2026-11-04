@@ -37,16 +37,28 @@ export default function FeedsPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState('');
+  const [expandedPinned, setExpandedPinned] = useState<Record<string, boolean>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialScrollDone = useRef(false);
 
   const supabase = createClient();
 
-  // Lấy các tin nhắn có nhiều upvote nhất (net_score > 0, sắp xếp giảm dần, tối đa 3 tin)
+  // Đánh dấu đã xem toàn bộ tin nhắn khi ở trang bảng tin
+  useEffect(() => {
+    try {
+      localStorage.setItem('spff_feeds_last_read', new Date().toISOString());
+    } catch (_) {}
+  }, [posts.length]);
+
+  // Chỉ lấy tối đa 3 tin có nhiều upvote nhất và mới nhất
   const pinnedPosts = [...posts]
     .filter((p) => (p.net_score ?? 0) > 0)
-    .sort((a, b) => (b.net_score ?? 0) - (a.net_score ?? 0))
+    .sort((a, b) => {
+      const scoreDiff = (b.net_score ?? 0) - (a.net_score ?? 0);
+      if (scoreDiff !== 0) return scoreDiff;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    })
     .slice(0, 3);
 
   const scrollToPost = (postId: string) => {
@@ -424,46 +436,77 @@ export default function FeedsPage() {
           </div>
         </div>
 
-        {/* 2. Tin nhắn được nhiều Upvote nhất được ghim lại ở Top */}
+        {/* 2. Tin nhắn được nhiều Upvote nhất được ghim lại ở Top (Tối đa 3 tin, hàng ngang lướt sang) */}
         {pinnedPosts.length > 0 && (
-          <div className="bg-gradient-to-r from-amber-50 to-orange-50/70 border border-amber-200/90 rounded-2xl p-2.5 sm:p-3 shadow-2xs space-y-1.5">
-            <div className="flex items-center justify-between gap-1 text-[11px] font-black text-amber-900">
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50/70 border border-amber-200/90 rounded-2xl p-2.5 sm:p-3 shadow-2xs space-y-2">
+            <div className="flex items-center justify-between gap-1 text-[11px] font-black text-amber-900 px-0.5">
               <div className="flex items-center gap-1.5">
                 <Pin className="w-3.5 h-3.5 text-orange-600 fill-orange-500 -rotate-45 shrink-0" />
                 <span className="uppercase tracking-tight text-[10px] sm:text-[11px]">
-                  Tin Ghim Nhiều Upvote Nhất
+                  Tin Ghim Nổi Bật ({pinnedPosts.length} tin nhiều vote & mới nhất)
                 </span>
               </div>
-              <span className="text-[10px] font-extrabold text-amber-800 bg-amber-200/60 px-1.5 py-0.2 rounded-full shrink-0">
-                Top {pinnedPosts.length}
+              <span className="text-[10px] font-bold text-amber-700/80">
+                Lướt ngang &rarr;
               </span>
             </div>
 
-            <div className="space-y-1.5">
-              {pinnedPosts.map((post) => (
-                <div
-                  key={`pinned-${post.id}`}
-                  onClick={() => scrollToPost(post.id)}
-                  className="flex items-start gap-2 bg-white/95 hover:bg-white border border-amber-200/70 rounded-xl p-2 transition cursor-pointer active:scale-[0.99] shadow-2xs"
-                  title="Bấm để cuộn đến tin nhắn này trong đoạn chat"
-                >
-                  <DriverAvatar profile={post.user} size="xs" showStars={true} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-[11px] font-bold text-slate-900 truncate">
-                        {post.user?.full_name || 'Bác tài'}
-                      </span>
-                      <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 flex items-center gap-0.5 shrink-0">
-                        <ThumbsUp className="w-2.5 h-2.5" />
-                        <span>+{post.net_score}</span>
-                      </span>
+            {/* Hàng ngang cuộn lướt sang tiết kiệm không gian */}
+            <div className="flex items-start gap-2.5 overflow-x-auto no-scrollbar snap-x py-0.5">
+              {pinnedPosts.map((post) => {
+                const isExpanded = Boolean(expandedPinned[post.id]);
+                const isLong = post.content.length > 60 || post.content.includes('\n');
+
+                return (
+                  <div
+                    key={`pinned-${post.id}`}
+                    onClick={() => scrollToPost(post.id)}
+                    className="w-[220px] xs:w-[250px] sm:w-[270px] shrink-0 snap-start bg-white/95 hover:bg-white border border-amber-200/80 rounded-xl p-2.5 transition cursor-pointer active:scale-[0.99] shadow-2xs flex flex-col justify-between"
+                    title="Bấm để cuộn đến tin nhắn này trong đoạn chat"
+                  >
+                    <div>
+                      {/* Header tin ghim: Avatar + Tên + Điểm upvote */}
+                      <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <DriverAvatar profile={post.user} size="xs" showStars={true} />
+                          <span className="text-[11px] font-bold text-slate-900 truncate">
+                            {post.user?.full_name || 'Bác tài'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 flex items-center gap-0.5 shrink-0">
+                          <ThumbsUp className="w-2.5 h-2.5" />
+                          <span>+{post.net_score}</span>
+                        </span>
+                      </div>
+
+                      {/* Nội dung tối đa 2 dòng + Xem thêm/Rút gọn */}
+                      <p
+                        className={`text-xs text-slate-700 leading-relaxed break-words ${
+                          isExpanded ? 'whitespace-pre-wrap' : 'line-clamp-2'
+                        }`}
+                      >
+                        {post.content}
+                      </p>
                     </div>
-                    <p className="text-xs text-slate-700 line-clamp-2 leading-relaxed mt-0.5">
-                      {post.content}
-                    </p>
+
+                    {isLong && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedPinned((prev) => ({
+                            ...prev,
+                            [post.id]: !prev[post.id],
+                          }));
+                        }}
+                        className="text-[10px] font-bold text-orange-600 hover:text-orange-700 self-start mt-1 cursor-pointer"
+                      >
+                        {isExpanded ? 'Rút gọn' : '... Xem thêm'}
+                      </button>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
