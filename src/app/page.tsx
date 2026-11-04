@@ -11,6 +11,7 @@ import { RateLocationOrderModal } from '@/components/warehouse/RateLocationOrder
 import { fetchOrderRatings, calculateOrderPrediction, filterRatingsNearLocation } from '@/lib/utils/orderRatings';
 import { preloadFeedsData } from '@/lib/utils/feedsCache';
 import { useProvince } from '@/lib/contexts/ProvinceContext';
+import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
 import {
   MapPin,
   PlusCircle,
@@ -26,6 +27,9 @@ import {
   CircleParking,
   Zap,
   Waves,
+  Navigation2,
+  Volume2,
+  X,
 } from 'lucide-react';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), {
@@ -634,6 +638,113 @@ export default function HomePage() {
           <LocateFixed className={`w-5 h-5 text-orange-600 ${locating ? 'animate-spin' : ''}`} />
         </button>
       </div>
+
+      {/* Thông tin kho / shop đang chọn trên bản đồ (Hiện ngay khi bấm vào ghim trên bản đồ) */}
+      {selectedWarehouse && (
+        <div className="bg-gradient-to-br from-orange-50/70 via-white to-amber-50/50 rounded-2xl p-3 sm:p-3.5 border-2 border-orange-400/80 shadow-md animate-in fade-in slide-in-from-top-2 duration-200 space-y-2.5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-orange-100 border border-orange-200 flex items-center justify-center text-orange-600 shrink-0 mt-0.5">
+                {selectedWarehouse.category === 'eatery' ? (
+                  <UtensilsCrossed className="w-5 h-5 text-emerald-600" />
+                ) : selectedWarehouse.category === 'customer' ? (
+                  <Home className="w-5 h-5 text-blue-600" />
+                ) : selectedWarehouse.category === 'parking' ? (
+                  <CircleParking className="w-5 h-5 text-indigo-600" />
+                ) : (
+                  <Building2 className="w-5 h-5 text-orange-600" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
+                      selectedWarehouse.category === 'eatery'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : selectedWarehouse.category === 'customer'
+                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : selectedWarehouse.category === 'parking'
+                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                        : 'bg-orange-50 text-orange-700 border-orange-200'
+                    }`}
+                  >
+                    {selectedWarehouse.category === 'eatery'
+                      ? 'Quán ăn'
+                      : selectedWarehouse.category === 'customer'
+                      ? 'Nhà khách'
+                      : selectedWarehouse.category === 'parking'
+                      ? 'Bãi giữ xe'
+                      : 'Kho hàng'}
+                  </span>
+                  {selectedWarehouse.distance_km !== undefined && (
+                    <span className="text-[10px] font-extrabold text-orange-700 bg-orange-100/80 px-1.5 py-0.2 rounded border border-orange-200">
+                      Cách {formatDistance(selectedWarehouse.distance_km)}
+                    </span>
+                  )}
+                  {selectedWarehouse.creator?.full_name && (
+                    <span className="text-[10px] text-slate-400">
+                      • Ghim bởi {selectedWarehouse.creator.full_name}
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-sm font-black text-slate-900 truncate mt-0.5">
+                  {selectedWarehouse.name}
+                </h3>
+                {selectedWarehouse.address && (
+                  <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
+                    {selectedWarehouse.address}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSelectedWarehouse(null)}
+              className="p-1 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition active:scale-95 cursor-pointer shrink-0"
+              title="Đóng thông tin"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Cụm 3 nút hành động nhanh */}
+          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+            <a
+              href={getGoogleMapsNavigationUrl(
+                selectedWarehouse.latitude,
+                selectedWarehouse.longitude,
+                selectedWarehouse.address
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="py-2 px-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-2xs"
+            >
+              <Navigation2 className="w-3.5 h-3.5" />
+              <span>Đi ngay</span>
+            </a>
+
+            <Link
+              href={`/warehouse/${selectedWarehouse.id}`}
+              className="py-2 px-2 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-2xs"
+            >
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>Chỉ dẫn</span>
+            </Link>
+
+            <button
+              type="button"
+              onClick={() =>
+                setRatingModalContext({ mode: 'warehouse', warehouse: selectedWarehouse })
+              }
+              className="py-2 px-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
+            >
+              <Zap className="w-3.5 h-3.5 fill-current" />
+              <span>Báo đơn</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Nearest 5 Warehouses List */}
       {loading ? (

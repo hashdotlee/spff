@@ -500,15 +500,15 @@ export default function NewIncidentPage() {
         <div className="relative flex items-center justify-center">
           <div className="border-t border-slate-200 w-full" />
           <span className="bg-white px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">
-            Bổ sung thông tin (Tùy chọn)
+            Bổ sung thông tin (nếu có)
           </span>
         </div>
 
-        {/* 2. Phân loại sự cố (Tùy chọn) */}
+        {/* 2. Phân loại sự cố (nếu có) */}
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
             <span>Phân loại sự cố</span>
-            <span className="text-[10px] text-slate-400 font-normal normal-case">Tùy chọn</span>
+            <span className="text-[10px] text-slate-400 font-normal normal-case">nếu có</span>
           </label>
           <div className="grid grid-cols-3 gap-1.5">
             {INCIDENT_TYPES.map((item) => {
@@ -533,14 +533,14 @@ export default function NewIncidentPage() {
           </div>
         </div>
 
-        {/* 3. Ảnh hiện trường (Tùy chọn) */}
+        {/* 3. Ảnh hiện trường (nếu có) */}
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
             <span className="flex items-center gap-1">
               <Camera className="w-3.5 h-3.5 text-slate-500" />
               <span>Ảnh hiện trường</span>
             </span>
-            <span className="text-[10px] text-slate-400 font-normal normal-case">Tùy chọn</span>
+            <span className="text-[10px] text-slate-400 font-normal normal-case">nếu có</span>
           </label>
 
           {!photoBlob ? (
@@ -587,10 +587,10 @@ export default function NewIncidentPage() {
           )}
         </div>
 
-        {/* 4. Ghi âm lời nhắn (Tùy chọn) */}
+        {/* 4. Ghi âm lời nhắn (nếu có) */}
         <div>
           <QuickVoiceInput
-            label="Ghi âm lời nhắn (Tùy chọn)"
+            label="Ghi âm lời nhắn (nếu có)"
             helperText="Nói nhanh vị trí làn đường, cần hỗ trợ đồ gì..."
             accentColor="red"
             onAudioChange={(blob) => {
@@ -599,11 +599,11 @@ export default function NewIncidentPage() {
           />
         </div>
 
-        {/* 5. Ghi chú thêm (Tùy chọn) */}
+        {/* 5. Ghi chú thêm (nếu có) */}
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
             <span>Ghi chú thêm</span>
-            <span className="text-[10px] text-slate-400 font-normal normal-case">Tùy chọn</span>
+            <span className="text-[10px] text-slate-400 font-normal normal-case">nếu có</span>
           </label>
           <input
             type="text"

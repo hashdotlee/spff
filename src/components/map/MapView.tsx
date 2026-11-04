@@ -402,6 +402,11 @@ export default function MapView({
           onSelectWarehouse(wh);
         }
       });
+
+      if (isSelected) {
+        marker.openPopup();
+        map.panTo([wh.latitude, wh.longitude], { animate: true });
+      }
     });
 
     // 4. SOS Incident Markers (Flashing Red Pin 🚨)
@@ -478,6 +483,11 @@ export default function MapView({
           onSelectIncident(inc);
         }
       });
+
+      if (isSelected) {
+        marker.openPopup();
+        map.panTo([inc.latitude, inc.longitude], { animate: true });
+      }
     });
 
     // 5. Flood Reports (Điểm ngập nước 🌊 do bác tài báo)

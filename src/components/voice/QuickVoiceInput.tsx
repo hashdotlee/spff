@@ -147,7 +147,7 @@ export function QuickVoiceInput({
           <span>{label}</span>
         </label>
         <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium">
-          <span>(Tùy chọn)</span>
+          <span>(nếu có)</span>
           <span>•</span>
           <span>Tối đa {maxSeconds}s</span>
         </div>

@@ -648,7 +648,7 @@ export default function NewWarehousePage() {
                 Tên kho hoặc ghi chú
               </label>
               <span className="text-[10px] text-slate-400 font-medium block">
-                (Tùy chọn)
+                (nếu có)
               </span>
             </div>
             <input
@@ -668,13 +668,13 @@ export default function NewWarehousePage() {
             />
           </div>
 
-          {/* Địa chỉ chính xác (Tùy chọn bổ sung cho định vị) */}
+          {/* Địa chỉ chính xác (nếu có bổ sung cho định vị) */}
           <div className="pt-2 border-t border-slate-100">
             <div className="mb-1.5">
               <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-orange-600" />
                 <span>Địa chỉ chính xác</span>
-                <span className="text-[10px] text-slate-400 font-medium normal-case">(Tùy chọn)</span>
+                <span className="text-[10px] text-slate-400 font-medium normal-case">(nếu có)</span>
               </label>
             </div>
 

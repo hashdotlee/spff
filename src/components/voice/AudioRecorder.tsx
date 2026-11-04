@@ -335,7 +335,7 @@ export function AudioRecorder({ warehouseId, onSuccess }: AudioRecorderProps) {
           {/* Optional Note Text */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Ghi chú tóm tắt bằng chữ (tùy chọn)
+              Ghi chú tóm tắt bằng chữ (nếu có)
             </label>
             <input
               type="text"
