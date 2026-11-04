@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { Incident, IncidentType, Profile } from '@/types/database';
 import { formatDistance } from '@/lib/utils/distance';
 import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
+import { DriverRankBadge } from '@/components/common/DriverAvatar';
 import {
   Wrench,
   Fuel,
@@ -210,6 +211,12 @@ export function IncidentCard({
                 <span className="font-bold text-slate-800">
                   {incident.user?.full_name || 'Đồng nghiệp'}
                 </span>
+                {incident.user?.reputation_score !== undefined && (
+                  <DriverRankBadge
+                    reputationScore={incident.user.reputation_score}
+                    showTitle={false}
+                  />
+                )}
                 <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-[10px]">
                   📞 {incident.phone}
                 </span>
@@ -228,6 +235,12 @@ export function IncidentCard({
                     <span>Người nhận giúp:</span>
                   </span>
                   <span className="font-bold text-slate-900">{primaryHelper.full_name || 'Bác tài'}</span>
+                  {primaryHelper.reputation_score !== undefined && (
+                    <DriverRankBadge
+                      reputationScore={primaryHelper.reputation_score}
+                      showTitle={false}
+                    />
+                  )}
                   {primaryHelper.phone && (
                     <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-[10px]">
                       📞 {primaryHelper.phone}

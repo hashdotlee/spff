@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, PlusCircle, Trophy, User, Siren } from 'lucide-react';
+import { Home, PlusCircle, MessageSquareText, User, Siren } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -49,10 +49,10 @@ export function BottomNavigation() {
       highlight: true,
     },
     {
-      label: 'Bảng vàng',
-      href: '/leaderboard',
-      icon: Trophy,
-      isActive: pathname === '/leaderboard',
+      label: 'Bảng tin',
+      href: '/feeds',
+      icon: MessageSquareText,
+      isActive: pathname.startsWith('/feeds'),
     },
     {
       label: 'Cá nhân',

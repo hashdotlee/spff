@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { Profile } from '@/types/database';
 import { Trophy, Award, Heart, ArrowRight } from 'lucide-react';
 import { VietQRModal } from '@/components/donation/VietQRModal';
+import { DriverAvatar, DriverRankBadge } from '@/components/common/DriverAvatar';
 
 export default function LeaderboardPage() {
   const [topDrivers, setTopDrivers] = useState<Profile[]>([]);
@@ -87,41 +88,35 @@ export default function LeaderboardPage() {
                     {index + 1}
                   </div>
 
-                  {/* Avatar */}
-                  <Link
-                    href={`/profile/${driver.id}`}
-                    className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-700 font-bold text-xs sm:text-sm overflow-hidden shrink-0 active:scale-95 transition"
-                  >
-                    {driver.avatar_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={driver.avatar_url}
-                        alt={driver.full_name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      driver.full_name?.[0]?.toUpperCase() || 'TX'
-                    )}
-                  </Link>
+                  {/* Driver Avatar with Star Rating */}
+                  <DriverAvatar
+                    profile={driver}
+                    size="md"
+                    showStars={true}
+                    linkToProfile={true}
+                  />
 
                   {/* Info */}
                   <div className="min-w-0 flex-1">
-                    <Link
-                      href={`/profile/${driver.id}`}
-                      className="font-bold text-xs sm:text-sm text-slate-900 hover:text-orange-600 transition flex items-center gap-1.5 truncate"
-                    >
-                      <span className="truncate">{driver.full_name}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Link
+                        href={`/profile/${driver.id}`}
+                        className="font-bold text-xs sm:text-sm text-slate-900 hover:text-orange-600 transition truncate"
+                      >
+                        <span className="truncate">{driver.full_name}</span>
+                      </Link>
+                      <DriverRankBadge reputationScore={driver.reputation_score} />
                       {driver.role === 'admin' && (
                         <span className="text-[9px] px-1 py-0.2 bg-red-100 text-red-700 rounded font-bold shrink-0">
                           Admin
                         </span>
                       )}
-                    </Link>
+                    </div>
 
                     <div className="flex items-center gap-2 mt-0.5 text-xs">
                       <span className="font-semibold text-amber-600 flex items-center gap-1 text-[11px] sm:text-xs">
                         <Award className="w-3.5 h-3.5 shrink-0" />
-                        <span>{driver.reputation_score}đ</span>
+                        <span>{driver.reputation_score} điểm cống hiến</span>
                       </span>
                     </div>
                   </div>

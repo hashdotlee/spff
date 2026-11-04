@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { MapPin, User, ShieldAlert, Award, Siren } from 'lucide-react';
+import { MapPin, User, ShieldAlert, Award, Siren, Trophy } from 'lucide-react';
 import type { Profile } from '@/types/database';
 
 export function Navbar() {
@@ -138,6 +138,15 @@ export function Navbar() {
         </Link>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Bảng vàng vinh danh bác tài */}
+          <Link
+            href="/leaderboard"
+            className="p-1.5 text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100/80 rounded-full transition active:scale-95 shrink-0 flex items-center justify-center border border-amber-200"
+            title="Bảng vàng bác tài"
+          >
+            <Trophy className="w-3.5 h-3.5 fill-amber-500/20" />
+          </Link>
+
           {/* Quick SOS Link */}
           <Link
             href="/incidents/new"

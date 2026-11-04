@@ -15,6 +15,34 @@ export type IncidentType =
 export type IncidentStatus = 'open' | 'helping' | 'resolved' | 'cancelled';
 export type HelperStatus = 'offered' | 'accepted' | 'completed' | 'cancelled';
 
+export type PostTag = 'ket_xe' | 'chot_gt' | 'canh_bao' | 'tam_su' | 'quan_ngon' | 'khac';
+export type PostStatus = 'active' | 'hidden';
+
+export interface Post {
+  id: string;
+  user_id: string;
+  content: string;
+  tag: PostTag;
+  province: string | null;
+  upvotes_count: number;
+  downvotes_count: number;
+  status: PostStatus;
+  created_at: string;
+  updated_at: string;
+  // Joined / Computed fields
+  user?: Profile | null;
+  user_vote?: number | null; // 1: upvoted, -1: downvoted, null: not voted
+  net_score?: number;
+}
+
+export interface PostVote {
+  id: string;
+  post_id: string;
+  user_id: string;
+  vote_value: 1 | -1;
+  created_at: string;
+}
+
 export interface Profile {
   id: string;
   email: string | null;
