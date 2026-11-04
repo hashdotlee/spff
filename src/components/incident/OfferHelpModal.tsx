@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import type { Incident } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
-import { HeartHandshake, Clock, MessageSquare, X, Check, Phone, Coffee } from 'lucide-react';
+import { HeartHandshake, Clock, MessageSquare, X, Check, Phone, Coffee, Siren } from 'lucide-react';
 import { formatDistance } from '@/lib/utils/distance';
 
 interface OfferHelpModalProps {
@@ -125,12 +125,18 @@ export function OfferHelpModal({
 
         {/* Incident Summary Card */}
         <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={incident.photo_url}
-            alt="Hiện trường"
-            className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0"
-          />
+          {incident.photo_url ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={incident.photo_url}
+              alt="Hiện trường"
+              className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0 border border-red-200">
+              <Siren className="w-7 h-7" />
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <h3 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
               {incident.title}

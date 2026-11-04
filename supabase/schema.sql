@@ -475,7 +475,7 @@ CREATE TABLE IF NOT EXISTS public.incidents (
     latitude DOUBLE PRECISION NOT NULL,
     longitude DOUBLE PRECISION NOT NULL,
     address TEXT,
-    photo_url TEXT NOT NULL,
+    photo_url TEXT,
     phone TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'helping', 'resolved', 'cancelled')),
     helper_count INT NOT NULL DEFAULT 0,

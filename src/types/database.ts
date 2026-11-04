@@ -144,7 +144,7 @@ export interface Incident {
   latitude: number;
   longitude: number;
   address: string | null;
-  photo_url: string; // Bắt buộc ảnh hiện trường để chứng minh
+  photo_url?: string | null;
   phone: string;
   audio_url?: string | null;
   status: IncidentStatus;

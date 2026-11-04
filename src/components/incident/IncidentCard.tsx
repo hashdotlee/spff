@@ -150,25 +150,27 @@ export function IncidentCard({
         {/* Content Body */}
         <div className="p-3.5 sm:p-4 space-y-3">
           <div className="flex gap-3">
-            {/* On-Site Photo Thumbnail (Mandatory photo proof) */}
-            <div
-              onClick={() => setShowPhotoModal(true)}
-              className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden shrink-0 border border-slate-200 bg-slate-100 cursor-pointer group shadow-2xs"
-              title="Xem ảnh hiện trường phóng to"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={incident.photo_url}
-                alt={incident.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-              />
-              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                <Maximize2 className="w-4 h-4 text-white" />
+            {/* On-Site Photo Thumbnail nếu có */}
+            {incident.photo_url ? (
+              <div
+                onClick={() => setShowPhotoModal(true)}
+                className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden shrink-0 border border-slate-200 bg-slate-100 cursor-pointer group shadow-2xs"
+                title="Xem ảnh hiện trường phóng to"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={incident.photo_url}
+                  alt={incident.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                />
+                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                  <Maximize2 className="w-4 h-4 text-white" />
+                </div>
+                <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] font-bold px-1 py-0.5 rounded">
+                  Ảnh hiện trường
+                </span>
               </div>
-              <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] font-bold px-1 py-0.5 rounded">
-                Ảnh hiện trường
-              </span>
-            </div>
+            ) : null}
 
             {/* Info Details */}
             <div className="flex-1 min-w-0">
@@ -344,7 +346,7 @@ export function IncidentCard({
       </div>
 
       {/* Lightbox for Proof Photo */}
-      {showPhotoModal && (
+      {showPhotoModal && incident.photo_url && (
         <div
           className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
           onClick={() => setShowPhotoModal(false)}

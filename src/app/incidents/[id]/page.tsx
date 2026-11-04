@@ -436,42 +436,44 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
           </div>
         )}
 
-        {/* Proof Photo (Ảnh chứng minh tại hiện trường) */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <span>Ảnh chụp hiện trường sự cố</span>
-              <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                Đã xác thực
+        {/* Proof Photo (Ảnh chứng minh tại hiện trường nếu có) */}
+        {incident.photo_url ? (
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <span>Ảnh chụp hiện trường sự cố</span>
+                <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  Đã xác thực
+                </span>
               </span>
-            </span>
-            <button
-              onClick={() => setShowPhotoModal(true)}
-              className="text-xs text-red-600 hover:text-red-700 font-semibold flex items-center gap-1"
-            >
-              <Maximize2 className="w-3.5 h-3.5" />
-              <span>Phóng to</span>
-            </button>
-          </div>
+              <button
+                onClick={() => setShowPhotoModal(true)}
+                className="text-xs text-red-600 hover:text-red-700 font-semibold flex items-center gap-1"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span>Phóng to</span>
+              </button>
+            </div>
 
-          <div
-            onClick={() => setShowPhotoModal(true)}
-            className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 cursor-pointer group shadow-xs"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={incident.photo_url}
-              alt="Ảnh hiện trường"
-              className="w-full h-56 sm:h-72 object-cover group-hover:scale-102 transition duration-300"
-            />
-            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-              <span className="px-3 py-1.5 bg-black/60 text-white text-xs font-bold rounded-lg backdrop-blur-xs flex items-center gap-1.5">
-                <Maximize2 className="w-4 h-4" />
-                <span>Bấm để xem ảnh to</span>
-              </span>
+            <div
+              onClick={() => setShowPhotoModal(true)}
+              className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 cursor-pointer group shadow-xs"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={incident.photo_url}
+                alt="Ảnh hiện trường"
+                className="w-full h-56 sm:h-72 object-cover group-hover:scale-102 transition duration-300"
+              />
+              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                <span className="px-3 py-1.5 bg-black/60 text-white text-xs font-bold rounded-lg backdrop-blur-xs flex items-center gap-1.5">
+                  <Maximize2 className="w-4 h-4" />
+                  <span>Bấm để xem ảnh to</span>
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
 
         {/* Location & Distance Information */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
@@ -826,7 +828,7 @@ function IncidentDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id:
       )}
 
       {/* Fullscreen Photo Lightbox */}
-      {showPhotoModal && (
+      {showPhotoModal && incident.photo_url && (
         <div
           className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
           onClick={() => setShowPhotoModal(false)}
