@@ -414,7 +414,7 @@ export default function FeedsPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {posts.map((post) => {
             const isAuthor = Boolean(currentUser && post.user_id === currentUser.id);
             const isAdmin = currentUser?.role === 'admin';
@@ -422,103 +422,97 @@ export default function FeedsPage() {
             return (
               <div
                 key={post.id}
-                className="bg-white rounded-2xl p-3 border border-slate-200/90 shadow-2xs hover:border-slate-300 transition duration-150 space-y-2"
+                className="flex items-start gap-2 sm:gap-2.5 group"
               >
-                {/* Header: Avatar với sao + Tên + Thời gian + Xóa */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <DriverAvatar
-                      profile={post.user}
-                      size="md"
-                      showStars={true}
-                      linkToProfile={true}
-                    />
+                {/* Avatar kèm sao dưới avatar */}
+                <DriverAvatar
+                  profile={post.user}
+                  size="sm"
+                  showStars={true}
+                  linkToProfile={true}
+                />
 
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <Link
-                          href={`/profile/${post.user_id}`}
-                          className="font-bold text-xs sm:text-sm text-slate-900 hover:text-orange-600 transition truncate"
-                        >
-                          {post.user?.full_name || 'Bác tài'}
-                        </Link>
-                        {post.user?.reputation_score !== undefined && (
-                          <DriverRankBadge
-                            reputationScore={post.user.reputation_score}
-                            showTitle={false}
-                          />
-                        )}
-                      </div>
-                      <span className="text-[10px] text-slate-400 font-medium block">
-                        {formatRelativeTime(post.created_at)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Nút xóa (chỉ tác giả hoặc admin) */}
-                  {(isAuthor || isAdmin) && (
-                    <button
-                      onClick={() => handleDeletePost(post.id)}
-                      className="p-1 text-slate-400 hover:text-red-600 rounded-lg transition active:scale-90 cursor-pointer"
-                      title="Xóa tin nhắn"
+                {/* Bong bóng tin nhắn */}
+                <div className="flex-1 min-w-0">
+                  {/* Tên bác tài + Thứ hạng sao + Thời gian + Nút xóa */}
+                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                    <Link
+                      href={`/profile/${post.user_id}`}
+                      className="font-bold text-xs text-slate-900 hover:text-orange-600 transition truncate"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Nội dung tin nhắn */}
-                <p className="text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-wrap break-words pl-0.5">
-                  {post.content}
-                </p>
-
-                {/* Footer: Cụm nút Upvote / Downvote */}
-                <div className="flex items-center justify-end pt-1">
-                  <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl p-0.5 shadow-2xs">
-                    {/* Upvote Button */}
-                    <button
-                      type="button"
-                      onClick={() => handleVote(post, 1)}
-                      className={`px-2 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer active:scale-95 ${
-                        post.user_vote === 1
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'text-slate-600 hover:text-emerald-700 hover:bg-emerald-50'
-                      }`}
-                      title="Upvote (+2 điểm cho tác giả)"
-                    >
-                      <ThumbsUp className="w-3.5 h-3.5" />
-                      <span>{post.upvotes_count || 0}</span>
-                    </button>
-
-                    {/* Net Score */}
-                    <span
-                      className={`px-1 text-xs font-black ${
-                        (post.net_score ?? 0) > 0
-                          ? 'text-emerald-700 font-extrabold'
-                          : (post.net_score ?? 0) < 0
-                          ? 'text-rose-700 font-extrabold'
-                          : 'text-slate-400'
-                      }`}
-                    >
-                      {(post.net_score ?? 0) > 0
-                        ? `+${post.net_score}`
-                        : post.net_score ?? 0}
+                      {post.user?.full_name || 'Bác tài'}
+                    </Link>
+                    {post.user?.reputation_score !== undefined && (
+                      <DriverRankBadge
+                        reputationScore={post.user.reputation_score}
+                        showTitle={false}
+                      />
+                    )}
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {formatRelativeTime(post.created_at)}
                     </span>
 
-                    {/* Downvote Button */}
-                    <button
-                      type="button"
-                      onClick={() => handleVote(post, -1)}
-                      className={`px-2 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer active:scale-95 ${
-                        post.user_vote === -1
-                          ? 'bg-rose-600 text-white shadow-xs'
-                          : 'text-slate-600 hover:text-rose-700 hover:bg-rose-50'
-                      }`}
-                      title="Downvote"
-                    >
-                      <ThumbsDown className="w-3.5 h-3.5" />
-                      <span>{post.downvotes_count || 0}</span>
-                    </button>
+                    {(isAuthor || isAdmin) && (
+                      <button
+                        onClick={() => handleDeletePost(post.id)}
+                        className="p-0.5 text-slate-300 hover:text-red-500 rounded transition ml-auto opacity-70 group-hover:opacity-100 cursor-pointer"
+                        title="Xóa tin nhắn"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Bong bóng nội dung chat + Reaction Upvote/Downvote */}
+                  <div className="inline-block max-w-full sm:max-w-[90%] bg-white border border-slate-200/90 rounded-2xl rounded-tl-xs px-3 py-2 shadow-2xs">
+                    <p className="text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-wrap break-words">
+                      {post.content}
+                    </p>
+
+                    {/* Cụm Upvote / Downvote thu gọn như reaction chat */}
+                    <div className="flex items-center justify-end gap-1 mt-1 pt-1 border-t border-slate-100/80">
+                      <button
+                        type="button"
+                        onClick={() => handleVote(post, 1)}
+                        className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold transition flex items-center gap-0.5 cursor-pointer active:scale-95 ${
+                          post.user_vote === 1
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'text-slate-400 hover:text-emerald-700 hover:bg-slate-50'
+                        }`}
+                        title="Upvote (+2 điểm)"
+                      >
+                        <ThumbsUp className="w-2.5 h-2.5" />
+                        <span>{post.upvotes_count || 0}</span>
+                      </button>
+
+                      <span
+                        className={`px-1 text-[10px] font-black ${
+                          (post.net_score ?? 0) > 0
+                            ? 'text-emerald-700 font-extrabold'
+                            : (post.net_score ?? 0) < 0
+                            ? 'text-rose-700 font-extrabold'
+                            : 'text-slate-400'
+                        }`}
+                      >
+                        {(post.net_score ?? 0) > 0
+                          ? `+${post.net_score}`
+                          : post.net_score ?? 0}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => handleVote(post, -1)}
+                        className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold transition flex items-center gap-0.5 cursor-pointer active:scale-95 ${
+                          post.user_vote === -1
+                            ? 'bg-rose-100 text-rose-800'
+                            : 'text-slate-400 hover:text-rose-700 hover:bg-slate-50'
+                        }`}
+                        title="Downvote"
+                      >
+                        <ThumbsDown className="w-2.5 h-2.5" />
+                        <span>{post.downvotes_count || 0}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
