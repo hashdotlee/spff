@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { Profile } from '@/types/database';
 import { Trophy, Award, Heart, ArrowRight } from 'lucide-react';
 import { VietQRModal } from '@/components/donation/VietQRModal';
-import { DriverAvatar, DriverRankBadge } from '@/components/common/DriverAvatar';
+import { DriverAvatar } from '@/components/common/DriverAvatar';
 
 export default function LeaderboardPage() {
   const [topDrivers, setTopDrivers] = useState<Profile[]>([]);
@@ -105,7 +105,6 @@ export default function LeaderboardPage() {
                       >
                         <span className="truncate">{driver.full_name}</span>
                       </Link>
-                      <DriverRankBadge reputationScore={driver.reputation_score} />
                       {driver.role === 'admin' && (
                         <span className="text-[9px] px-1 py-0.2 bg-red-100 text-red-700 rounded font-bold shrink-0">
                           Admin
