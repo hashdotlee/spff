@@ -4,11 +4,12 @@ import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import type { Warehouse, Incident, PlaceCategory, LocationOrderRating } from '@/types/database';
+import type { Warehouse, Incident, PlaceCategory, LocationOrderRating, FloodReport } from '@/types/database';
 import { calculateHaversineDistance, formatDistance } from '@/lib/utils/distance';
 import { NearestList } from '@/components/warehouse/NearestList';
 import { RateLocationOrderModal } from '@/components/warehouse/RateLocationOrderModal';
 import { fetchOrderRatings, calculateOrderPrediction, filterRatingsNearLocation } from '@/lib/utils/orderRatings';
+import { preloadFeedsData } from '@/lib/utils/feedsCache';
 import { useProvince } from '@/lib/contexts/ProvinceContext';
 import {
   MapPin,
@@ -24,6 +25,7 @@ import {
   Home,
   CircleParking,
   Zap,
+  Waves,
 } from 'lucide-react';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), {
@@ -48,6 +50,8 @@ export default function HomePage() {
   const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [orderRatings, setOrderRatings] = useState<LocationOrderRating[]>([]);
+  const [floodReports, setFloodReports] = useState<FloodReport[]>([]);
+  const [submittingFlood, setSubmittingFlood] = useState(false);
   const [ratingModalContext, setRatingModalContext] = useState<
     | { mode: 'current_location' }
     | { mode: 'warehouse'; warehouse: Warehouse }
@@ -179,14 +183,76 @@ export default function HomePage() {
     }
   }
 
+  // 5. Fetch flood reports (Điểm ngập lụt)
+  async function loadFloodReports() {
+    try {
+      const { data, error } = await supabase
+        .from('flood_reports')
+        .select(`*, user:profiles(*)`)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (!error && data) {
+        setFloodReports(data);
+      }
+    } catch (err) {
+      console.warn('Lỗi loadFloodReports:', err);
+    }
+  }
+
+  // Báo điểm ngập nước tại vị trí hiện tại của bác tài
+  async function handleReportFlood() {
+    if (!userLocation) {
+      requestLocation();
+      alert('Đang kích hoạt định vị GPS. Vui lòng cho phép quyền truy cập vị trí và bấm lại!');
+      return;
+    }
+
+    setSubmittingFlood(true);
+    const tempId =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `flood_${Date.now()}`;
+
+    const newReport: FloodReport = {
+      id: tempId,
+      latitude: userLocation.lat,
+      longitude: userLocation.lng,
+      note: 'Đoạn đường ngập nước do tài xế vừa báo',
+      created_at: new Date().toISOString(),
+      user_id: currentUserId,
+    };
+
+    // Hiển thị ngay tức thời trên bản đồ (Optimistic update)
+    setFloodReports((prev) => [newReport, ...prev]);
+
+    try {
+      await supabase.from('flood_reports').insert({
+        id: newReport.id,
+        latitude: newReport.latitude,
+        longitude: newReport.longitude,
+        note: newReport.note,
+        user_id: currentUserId,
+      });
+      alert('🌊 Đã đánh dấu điểm ngập tại vị trí của bạn để cảnh báo anh em đồng nghiệp!');
+    } catch (err) {
+      console.warn('Lỗi gửi flood report:', err);
+      alert('🌊 Đã ghi nhận điểm ngập tại vị trí của bạn!');
+    } finally {
+      setSubmittingFlood(false);
+    }
+  }
+
   useEffect(() => {
     setCurrentHour(new Date().getHours());
     requestLocation();
     loadWarehouses();
     loadIncidents();
     loadOrderRatings();
+    loadFloodReports();
+    // Preload dữ liệu bảng tin ngầm để khi bấm vào mở tức thì 0ms
+    preloadFeedsData(supabase);
 
-    // Lắng nghe thay đổi sự cố realtime trên bản đồ
+    // Lắng nghe thay đổi sự cố & điểm ngập realtime trên bản đồ
     const channel = supabase
       .channel('home_incidents_realtime')
       .on(
@@ -201,6 +267,13 @@ export default function HomePage() {
         { event: '*', schema: 'public', table: 'incident_helpers' },
         () => {
           loadIncidents();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'flood_reports' },
+        () => {
+          loadFloodReports();
         }
       )
       .subscribe();
@@ -488,6 +561,7 @@ export default function HomePage() {
           warehouses={sortedWarehouses}
           incidents={computedIncidents}
           orderRatings={orderRatings}
+          floodReports={floodReports}
           currentLocationPrediction={currentLocationPrediction}
           selectedWarehouseId={selectedWarehouse?.id}
           selectedIncidentId={selectedIncident?.id}
@@ -498,36 +572,40 @@ export default function HomePage() {
           className="h-64 sm:h-80 w-full rounded-2xl overflow-hidden shadow-xs border border-slate-200"
         />
 
-        {/* Nút báo nổ đơn tại vị trí định vị GPS hiện tại của tài xế */}
-        <button
-          onClick={() => {
-            if (!userLocation) {
-              requestLocation();
-              alert('Đang kích hoạt định vị GPS của bạn. Vui lòng cho phép quyền truy cập vị trí và thử lại!');
-              return;
-            }
-            setRatingModalContext({ mode: 'current_location' });
-          }}
-          className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-xs hover:bg-white text-slate-800 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl shadow-md border border-slate-200 hover:border-blue-400 transition active:scale-95 flex items-center gap-2 cursor-pointer text-xs font-bold group"
-          title="Báo tình hình nổ đơn tại vị trí định vị hiện tại của bạn"
-        >
-          <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition">
-            <Zap className="w-3.5 h-3.5 fill-current" />
-          </div>
-          <div className="text-left">
-            <div className="flex items-center gap-1">
-              <span className="text-xs font-black text-slate-900">Báo nổ đơn</span>
-              <span className="text-[10px] text-blue-600 font-extrabold px-1 py-0.2 rounded bg-blue-50 border border-blue-200">
-                +2đ ⭐
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-500 font-medium block truncate max-w-[140px] xs:max-w-[190px]">
-              {currentLocationPrediction?.hasData
-                ? `Vị trí bạn: ${currentLocationPrediction.badgeText}`
-                : 'Tại vị trí GPS của bạn'}
-            </span>
-          </div>
-        </button>
+        {/* Cụm nút tác vụ nhanh trên bản đồ (Chỉ icon theo yêu cầu): Báo nổ đơn & Báo ngập */}
+        <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
+          {/* Nút báo nổ đơn (Chỉ icon) */}
+          <button
+            type="button"
+            onClick={() => {
+              if (!userLocation) {
+                requestLocation();
+                alert('Đang kích hoạt định vị GPS của bạn. Vui lòng cho phép quyền truy cập vị trí và thử lại!');
+                return;
+              }
+              setRatingModalContext({ mode: 'current_location' });
+            }}
+            className="w-10 h-10 rounded-xl bg-white/95 backdrop-blur-xs hover:bg-white text-blue-600 shadow-md border border-slate-200 hover:border-blue-400 transition active:scale-90 flex items-center justify-center cursor-pointer group"
+            title="Báo tình hình nổ đơn tại vị trí GPS hiện tại (+2đ ⭐)"
+          >
+            <Zap className="w-5 h-5 fill-current text-blue-600 group-hover:scale-110 transition-transform" />
+          </button>
+
+          {/* Nút báo ngập (Chỉ icon) */}
+          <button
+            type="button"
+            onClick={handleReportFlood}
+            disabled={submittingFlood}
+            className="w-10 h-10 rounded-xl bg-white/95 backdrop-blur-xs hover:bg-white text-cyan-600 shadow-md border border-slate-200 hover:border-cyan-400 transition active:scale-90 flex items-center justify-center cursor-pointer group"
+            title="Báo điểm ngập nước tại vị trí hiện tại của bạn"
+          >
+            <Waves
+              className={`w-5 h-5 text-cyan-600 group-hover:scale-110 transition-transform ${
+                submittingFlood ? 'animate-pulse' : ''
+              }`}
+            />
+          </button>
+        </div>
 
         {/* Locate me button on Map overlay */}
         <button

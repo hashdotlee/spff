@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import type { Warehouse, Incident, LocationOrderRating, OrderPredictionResult } from '@/types/database';
+import type {
+  Warehouse,
+  Incident,
+  LocationOrderRating,
+  OrderPredictionResult,
+  FloodReport,
+} from '@/types/database';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
@@ -11,6 +17,7 @@ interface MapViewProps {
   warehouses: Warehouse[];
   incidents?: Incident[];
   orderRatings?: LocationOrderRating[];
+  floodReports?: FloodReport[];
   currentLocationPrediction?: OrderPredictionResult;
   selectedWarehouseId?: string | null;
   selectedIncidentId?: string | null;
@@ -26,6 +33,7 @@ export default function MapView({
   warehouses,
   incidents = [],
   orderRatings = [],
+  floodReports = [],
   currentLocationPrediction,
   selectedWarehouseId,
   selectedIncidentId,
@@ -459,11 +467,66 @@ export default function MapView({
         }
       });
     });
+
+    // 5. Flood Reports (Điểm ngập nước 🌊 do bác tài báo)
+    floodReports.forEach((flood) => {
+      if (
+        typeof flood.latitude !== 'number' ||
+        typeof flood.longitude !== 'number' ||
+        isNaN(flood.latitude) ||
+        isNaN(flood.longitude)
+      ) {
+        return;
+      }
+
+      const floodIcon = L.divIcon({
+        className: 'custom-flood-pin-container',
+        html: `
+          <div style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;">
+            <div style="position: absolute; inset: -4px; border-radius: 50%; background: rgba(6, 182, 212, 0.4); animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+            <div style="background: linear-gradient(135deg, #0284c7, #06b6d4); width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2.5px solid #ffffff; box-shadow: 0 4px 10px rgba(2, 132, 199, 0.5);">
+              <span style="font-size: 15px; line-height: 1;">🌊</span>
+            </div>
+          </div>
+        `,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
+        popupAnchor: [0, -17],
+      });
+
+      const timeStr = new Date(flood.created_at).toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      const marker = L.marker([flood.latitude, flood.longitude], { icon: floodIcon }).addTo(
+        markersLayer
+      );
+
+      marker.bindPopup(`
+        <div class="p-1 max-w-[200px]">
+          <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+            <span style="background-color: #e0f2fe; color: #0284c7; font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 6px; border: 1px solid #bae6fd;">
+              🌊 ĐIỂM NGẬP NƯỚC
+            </span>
+            <span style="font-size: 10px; color: #64748b;">${timeStr}</span>
+          </div>
+          <strong style="font-size: 11px; color: #0f172a; display: block;">
+            ${flood.user?.full_name ? `Bác tài: ${flood.user.full_name}` : 'Bác tài cảnh báo ngập'}
+          </strong>
+          ${flood.note ? `<p style="font-size: 10px; color: #334155; margin-top: 3px;">${flood.note}</p>` : ''}
+          <span style="font-size: 10px; color: #0284c7; font-weight: 600; display: block; margin-top: 4px;">
+            ⚠️ Đường ngập sâu, các bác tài lưu ý đi chậm hoặc tránh đoạn này!
+          </span>
+        </div>
+      `);
+    });
   }, [
     userLocation,
     warehouses,
     incidents,
     orderRatings,
+    floodReports,
     currentLocationPrediction,
     selectedWarehouseId,
     selectedIncidentId,

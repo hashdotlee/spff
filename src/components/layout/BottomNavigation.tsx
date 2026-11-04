@@ -5,12 +5,18 @@ import { usePathname } from 'next/navigation';
 import { Home, PlusCircle, MessageSquareText, User, Siren } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { preloadFeedsData } from '@/lib/utils/feedsCache';
 
 export function BottomNavigation() {
   const pathname = usePathname();
   const [userId, setUserId] = useState<string | null>(null);
   const [unreadFeedsCount, setUnreadFeedsCount] = useState<number>(0);
   const supabase = createClient();
+
+  // Preload dữ liệu bảng tin ngầm ngay khi app hoạt động
+  useEffect(() => {
+    preloadFeedsData(supabase);
+  }, []);
 
   // Kiểm tra tin nhắn mới chưa đọc khi không ở trang /feeds
   useEffect(() => {
@@ -127,6 +133,12 @@ export function BottomNavigation() {
             <Link
               key={item.href}
               href={item.href}
+              onMouseEnter={() => {
+                if (item.href === '/feeds') preloadFeedsData(supabase);
+              }}
+              onTouchStart={() => {
+                if (item.href === '/feeds') preloadFeedsData(supabase);
+              }}
               className={`flex-1 flex flex-col items-center justify-center py-1 min-h-[48px] rounded-xl transition active:scale-95 ${
                 item.isActive
                   ? item.isSos

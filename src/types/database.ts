@@ -201,3 +201,15 @@ export interface OrderPredictionResult {
   description: string;
   recentReportsCount: number;
 }
+
+export interface FloodReport {
+  id: string;
+  latitude: number;
+  longitude: number;
+  note?: string | null;
+  user_id?: string | null;
+  created_at: string;
+  // Joined / Computed fields
+  user?: Profile | null;
+  distance_km?: number;
+}

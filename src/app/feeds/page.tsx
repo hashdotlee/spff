@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import type { Post, Profile } from '@/types/database';
 import { DriverAvatar } from '@/components/common/DriverAvatar';
+import { getFeedsCache, setFeedsCache } from '@/lib/utils/feedsCache';
 import {
   Send,
   ThumbsUp,
@@ -32,10 +33,11 @@ function formatRelativeTime(dateString: string): string {
 }
 
 export default function FeedsPage() {
+  const initialCache = getFeedsCache();
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
-  const [topDrivers, setTopDrivers] = useState<Profile[]>([]);
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [topDrivers, setTopDrivers] = useState<Profile[]>(initialCache.topDrivers);
+  const [posts, setPosts] = useState<Post[]>(initialCache.posts);
+  const [loading, setLoading] = useState(!initialCache.hasCache);
   const [content, setContent] = useState('');
   const [expandedPinned, setExpandedPinned] = useState<Record<string, boolean>>({});
 
@@ -112,7 +114,11 @@ export default function FeedsPage() {
           .gt('reputation_score', 0)
           .order('reputation_score', { ascending: false })
           .limit(8);
-        if (data) setTopDrivers(data as Profile[]);
+        if (data) {
+          const list = data as Profile[];
+          setTopDrivers(list);
+          setFeedsCache(getFeedsCache().posts, list);
+        }
       } catch (err) {
         console.warn('Lỗi load top drivers:', err);
       }
@@ -123,7 +129,10 @@ export default function FeedsPage() {
   // 3. Tải toàn bộ danh sách tin nhắn (Không hiện loading giật màn hình khi re-fetch)
   const loadPosts = useCallback(async (isInitial = false) => {
     try {
-      if (isInitial) setLoading(true);
+      // Chỉ hiện spinner tải nếu bộ nhớ tạm hoàn toàn trống
+      if (isInitial && !getFeedsCache().hasCache) {
+        setLoading(true);
+      }
       const { data, error } = await supabase
         .from('posts')
         .select(`
@@ -171,6 +180,7 @@ export default function FeedsPage() {
           }));
 
         setPosts(parsedPosts);
+        setFeedsCache(parsedPosts, getFeedsCache().topDrivers);
       }
     } catch (err) {
       console.warn('Lỗi loadPosts:', err);
@@ -248,7 +258,11 @@ export default function FeedsPage() {
     };
 
     // Đẩy ngay vào luồng chat và xóa ô input ngay lập tức
-    setPosts((prev) => [...prev, optimisticPost]);
+    setPosts((prev) => {
+      const updated = [...prev, optimisticPost];
+      setFeedsCache(updated, topDrivers);
+      return updated;
+    });
     setContent('');
     setTimeout(() => scrollToBottom(true), 40);
 
@@ -268,14 +282,18 @@ export default function FeedsPage() {
 
       if (error) {
         console.error('Lỗi khi gửi tin nhắn:', error);
-        setPosts((prev) => prev.filter((p) => p.id !== tempId));
+        setPosts((prev) => {
+          const reverted = prev.filter((p) => p.id !== tempId);
+          setFeedsCache(reverted, topDrivers);
+          return reverted;
+        });
         alert('Không thể gửi tin: ' + error.message);
         return;
       }
 
       if (data) {
-        setPosts((prev) =>
-          prev.map((p) =>
+        setPosts((prev) => {
+          const updated = prev.map((p) =>
             p.id === tempId
               ? {
                   ...data,
@@ -285,12 +303,18 @@ export default function FeedsPage() {
                   downvotes_count: 0,
                 }
               : p
-          )
-        );
+          );
+          setFeedsCache(updated, topDrivers);
+          return updated;
+        });
       }
     } catch (err) {
       console.error('Lỗi handleCreatePost:', err);
-      setPosts((prev) => prev.filter((p) => p.id !== tempId));
+      setPosts((prev) => {
+        const reverted = prev.filter((p) => p.id !== tempId);
+        setFeedsCache(reverted, topDrivers);
+        return reverted;
+      });
     }
   }
 
@@ -317,8 +341,8 @@ export default function FeedsPage() {
     if (nextVote === 1) deltaUp += 1;
     if (nextVote === -1) deltaDown += 1;
 
-    setPosts((prev) =>
-      prev.map((p) => {
+    setPosts((prev) => {
+      const updated = prev.map((p) => {
         if (p.id !== post.id) return p;
         const newUp = Math.max(0, (p.upvotes_count || 0) + deltaUp);
         const newDown = Math.max(0, (p.downvotes_count || 0) + deltaDown);
@@ -329,8 +353,10 @@ export default function FeedsPage() {
           downvotes_count: newDown,
           net_score: newUp - newDown,
         };
-      })
-    );
+      });
+      setFeedsCache(updated, topDrivers);
+      return updated;
+    });
 
     try {
       if (nextVote === null) {
@@ -370,7 +396,11 @@ export default function FeedsPage() {
         return;
       }
 
-      setPosts((prev) => prev.filter((p) => p.id !== postId));
+      setPosts((prev) => {
+        const updated = prev.filter((p) => p.id !== postId);
+        setFeedsCache(updated, topDrivers);
+        return updated;
+      });
     } catch (err) {
       console.error('Lỗi handleDeletePost:', err);
     }
