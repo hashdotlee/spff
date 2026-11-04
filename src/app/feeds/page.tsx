@@ -10,7 +10,6 @@ import {
   ThumbsUp,
   ThumbsDown,
   Trash2,
-  Loader2,
   Trophy,
   ChevronRight,
   Pin,
@@ -37,7 +36,6 @@ export default function FeedsPage() {
   const [topDrivers, setTopDrivers] = useState<Profile[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [content, setContent] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -110,10 +108,10 @@ export default function FeedsPage() {
     loadTopDrivers();
   }, []);
 
-  // 3. Tải toàn bộ danh sách tin nhắn (Lấy 60 tin mới nhất và đảo ngược để tin mới nhất ở dưới cùng)
-  const loadPosts = useCallback(async () => {
+  // 3. Tải toàn bộ danh sách tin nhắn (Không hiện loading giật màn hình khi re-fetch)
+  const loadPosts = useCallback(async (isInitial = false) => {
     try {
-      setLoading(true);
+      if (isInitial) setLoading(true);
       const { data, error } = await supabase
         .from('posts')
         .select(`
@@ -165,28 +163,28 @@ export default function FeedsPage() {
     } catch (err) {
       console.warn('Lỗi loadPosts:', err);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadPosts();
+    loadPosts(true);
 
-    // Lắng nghe realtime các tin nhắn mới
+    // Lắng nghe realtime các tin nhắn mới (chạy ngầm hoàn toàn, không loading giật màn hình)
     const channel = supabase
       .channel('feeds_realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'posts' },
         () => {
-          loadPosts();
+          loadPosts(false);
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'post_votes' },
         () => {
-          loadPosts();
+          loadPosts(false);
         }
       )
       .subscribe();
@@ -204,7 +202,7 @@ export default function FeedsPage() {
     }
   }, [loading, posts.length, scrollToBottom]);
 
-  // 4. Gửi tin nhắn mới lên bảng tin (Thêm vào cuối danh sách và cuộn xuống)
+  // 4. Gửi tin nhắn mới lên bảng tin (Tức thời, không hiển thị loading làm mất tập trung)
   async function handleCreatePost(e: React.FormEvent) {
     e.preventDefault();
     if (!currentUser) {
@@ -219,8 +217,30 @@ export default function FeedsPage() {
       return;
     }
 
+    // Tạo tin nhắn tạm hiện ngay lập tức
+    const tempId = `temp-${Date.now()}`;
+    const optimisticPost: Post = {
+      id: tempId,
+      user_id: currentUser.id,
+      content: trimmed,
+      tag: 'tam_su',
+      province: null,
+      status: 'active',
+      upvotes_count: 0,
+      downvotes_count: 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      user: currentUser,
+      user_vote: null,
+      net_score: 0,
+    };
+
+    // Đẩy ngay vào luồng chat và xóa ô input ngay lập tức
+    setPosts((prev) => [...prev, optimisticPost]);
+    setContent('');
+    setTimeout(() => scrollToBottom(true), 40);
+
     try {
-      setSubmitting(true);
       const postPayload = {
         user_id: currentUser.id,
         content: trimmed,
@@ -236,31 +256,33 @@ export default function FeedsPage() {
 
       if (error) {
         console.error('Lỗi khi gửi tin nhắn:', error);
+        setPosts((prev) => prev.filter((p) => p.id !== tempId));
         alert('Không thể gửi tin: ' + error.message);
         return;
       }
 
       if (data) {
-        const newPost: Post = {
-          ...data,
-          user_vote: null,
-          net_score: 0,
-          upvotes_count: 0,
-          downvotes_count: 0,
-        };
-        // Thêm vào cuối danh sách (tin mới nhất ở dưới)
-        setPosts((prev) => [...prev, newPost]);
-        setContent('');
-        setTimeout(() => scrollToBottom(true), 80);
+        setPosts((prev) =>
+          prev.map((p) =>
+            p.id === tempId
+              ? {
+                  ...data,
+                  user_vote: null,
+                  net_score: 0,
+                  upvotes_count: 0,
+                  downvotes_count: 0,
+                }
+              : p
+          )
+        );
       }
     } catch (err) {
       console.error('Lỗi handleCreatePost:', err);
-    } finally {
-      setSubmitting(false);
+      setPosts((prev) => prev.filter((p) => p.id !== tempId));
     }
   }
 
-  // 5. Xử lý Vote (Upvote / Downvote)
+  // 5. Xử lý Vote (Upvote / Downvote - Cập nhật tức thời, chạy ngầm)
   async function handleVote(post: Post, intendedValue: 1 | -1) {
     if (!currentUser) {
       alert('Vui lòng đăng nhập để bình chọn tin nhắn!');
@@ -317,7 +339,7 @@ export default function FeedsPage() {
       }
     } catch (err) {
       console.error('Lỗi khi gửi vote:', err);
-      loadPosts();
+      loadPosts(false);
     }
   }
 
@@ -595,15 +617,11 @@ export default function FeedsPage() {
               />
               <button
                 type="submit"
-                disabled={submitting || !content.trim()}
+                disabled={!content.trim()}
                 className="p-2 sm:px-3.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shrink-0 active:scale-95 shadow-2xs cursor-pointer"
                 title="Gửi tin nhắn"
               >
-                {submitting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
+                <Send className="w-4 h-4" />
                 <span className="hidden sm:inline">Gửi</span>
               </button>
             </form>
