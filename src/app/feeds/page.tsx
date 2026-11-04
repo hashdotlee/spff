@@ -11,7 +11,8 @@ import {
   ThumbsDown,
   Trash2,
   Loader2,
-  MessageSquare,
+  Trophy,
+  ChevronRight,
 } from 'lucide-react';
 
 function formatRelativeTime(dateString: string): string {
@@ -32,6 +33,7 @@ function formatRelativeTime(dateString: string): string {
 
 export default function FeedsPage() {
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
+  const [topDrivers, setTopDrivers] = useState<Profile[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -61,7 +63,26 @@ export default function FeedsPage() {
     loadAuth();
   }, []);
 
-  // 2. Tải toàn bộ danh sách tin nhắn (Không lọc, hiển thị luồng chat chung)
+  // 2. Tải danh sách Bác tài tiêu biểu
+  useEffect(() => {
+    async function loadTopDrivers() {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('is_banned', false)
+          .gt('reputation_score', 0)
+          .order('reputation_score', { ascending: false })
+          .limit(8);
+        if (data) setTopDrivers(data as Profile[]);
+      } catch (err) {
+        console.warn('Lỗi load top drivers:', err);
+      }
+    }
+    loadTopDrivers();
+  }, []);
+
+  // 3. Tải toàn bộ danh sách tin nhắn (Không lọc, hiển thị luồng chat chung)
   const loadPosts = useCallback(async () => {
     try {
       setLoading(true);
@@ -143,7 +164,7 @@ export default function FeedsPage() {
     };
   }, [loadPosts]);
 
-  // 3. Gửi tin nhắn mới lên bảng tin
+  // 4. Gửi tin nhắn mới lên bảng tin
   async function handleCreatePost(e: React.FormEvent) {
     e.preventDefault();
     if (!currentUser) {
@@ -197,7 +218,7 @@ export default function FeedsPage() {
     }
   }
 
-  // 4. Xử lý Vote (Upvote / Downvote)
+  // 5. Xử lý Vote (Upvote / Downvote)
   async function handleVote(post: Post, intendedValue: 1 | -1) {
     if (!currentUser) {
       alert('Vui lòng đăng nhập để bình chọn tin nhắn!');
@@ -260,7 +281,7 @@ export default function FeedsPage() {
     }
   }
 
-  // 5. Xóa tin nhắn
+  // 6. Xóa tin nhắn
   async function handleDeletePost(postId: string) {
     if (!window.confirm('Bạn có chắc muốn xóa tin nhắn này không?')) return;
 
@@ -283,15 +304,61 @@ export default function FeedsPage() {
 
   return (
     <div className="p-3 sm:p-4 space-y-3 max-w-xl mx-auto w-full">
-      {/* 1. Header tinh gọn */}
-      <div className="flex items-center justify-between px-1">
-        <h1 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-1.5">
-          <MessageSquare className="w-4 h-4 text-orange-600" />
-          <span>Bảng Tin Anh Em</span>
-        </h1>
-        <span className="text-[11px] text-slate-400 font-medium">
-          {posts.length} tin nhắn
-        </span>
+      {/* 1. Vinh danh Bác tài tiêu biểu */}
+      <div className="bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border border-amber-200/80 rounded-2xl p-3 sm:p-3.5 shadow-2xs">
+        <div className="flex items-center justify-between gap-2 mb-2.5">
+          <div className="flex items-center gap-1.5">
+            <Trophy className="w-4 h-4 text-amber-600 fill-amber-100" />
+            <h2 className="text-xs font-black text-slate-900 uppercase tracking-tight">
+              Bác Tài Tiêu Biểu
+            </h2>
+          </div>
+          <Link
+            href="/leaderboard"
+            className="text-[11px] font-bold text-amber-800 hover:text-amber-950 flex items-center gap-0.5 active:scale-95 transition"
+          >
+            <span>Bảng vàng</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        {/* Carousel Top Drivers */}
+        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar py-1">
+          {topDrivers.length === 0 ? (
+            <div className="text-[11px] text-slate-400 italic py-1">Đang tải danh sách...</div>
+          ) : (
+            topDrivers.map((driver, index) => (
+              <Link
+                key={driver.id}
+                href={`/profile/${driver.id}`}
+                className="flex flex-col items-center gap-1 group shrink-0 active:scale-95 transition"
+              >
+                <div className="relative pt-1 pb-1">
+                  <DriverAvatar profile={driver} size="md" showStars={true} />
+                  {index < 3 && (
+                    <span
+                      className={`absolute -top-1 -right-1 text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white shadow-2xs ${
+                        index === 0
+                          ? 'bg-amber-400 text-slate-900'
+                          : index === 1
+                          ? 'bg-slate-300 text-slate-900'
+                          : 'bg-amber-700 text-white'
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[11px] font-bold text-slate-800 max-w-[68px] truncate text-center">
+                  {driver.full_name?.split(' ').slice(-1)[0] || 'Bác tài'}
+                </span>
+                <span className="text-[9px] font-extrabold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded-full border border-amber-200">
+                  {driver.reputation_score}đ
+                </span>
+              </Link>
+            ))
+          )}
+        </div>
       </div>
 
       {/* 2. Khung nhập tin nhắn phong cách Chat (Clear & Minimal) */}
