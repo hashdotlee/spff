@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import type { Post, Profile } from '@/types/database';
-import { DriverAvatar, DriverRankBadge } from '@/components/common/DriverAvatar';
+import { DriverAvatar } from '@/components/common/DriverAvatar';
 import {
   Send,
   ThumbsUp,
@@ -434,7 +434,7 @@ export default function FeedsPage() {
 
                 {/* Bong bóng tin nhắn */}
                 <div className="flex-1 min-w-0">
-                  {/* Tên bác tài + Thứ hạng sao + Thời gian + Nút xóa */}
+                  {/* Tên bác tài + Thời gian + Nút xóa */}
                   <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                     <Link
                       href={`/profile/${post.user_id}`}
@@ -442,12 +442,6 @@ export default function FeedsPage() {
                     >
                       {post.user?.full_name || 'Bác tài'}
                     </Link>
-                    {post.user?.reputation_score !== undefined && (
-                      <DriverRankBadge
-                        reputationScore={post.user.reputation_score}
-                        showTitle={false}
-                      />
-                    )}
                     <span className="text-[10px] text-slate-400 font-medium">
                       {formatRelativeTime(post.created_at)}
                     </span>

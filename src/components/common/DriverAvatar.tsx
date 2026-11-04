@@ -130,28 +130,24 @@ export function DriverAvatar({
 }
 
 /**
- * Huy hiệu danh hiệu bác tài đi kèm tên (ví dụ: [⭐⭐⭐ Thổ Địa Bến Bãi])
+ * Huy hiệu danh hiệu bác tài đi kèm tên (chỉ hiện tên danh hiệu và màu sắc theo cấp bậc)
  */
 export function DriverRankBadge({
   reputationScore = 0,
-  showTitle = true,
+  className = '',
 }: {
   reputationScore?: number;
-  showTitle?: boolean;
+  className?: string;
+  showTitle?: boolean; // kept for backwards compatibility
 }) {
   const rank = getDriverRank(reputationScore);
 
   return (
     <span
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border ${rank.badgeBg}`}
+      className={`inline-flex items-center px-1.5 py-0.2 rounded-md text-[10px] font-bold border ${rank.badgeBg} ${className}`}
       title={`${rank.title} - ${rank.description}`}
     >
-      <span className="flex items-center gap-0.2">
-        {Array.from({ length: rank.stars }).map((_, i) => (
-          <Star key={i} className="w-2.5 h-2.5 fill-amber-500 text-amber-500 shrink-0" />
-        ))}
-      </span>
-      {showTitle && <span>{rank.title}</span>}
+      {rank.title}
     </span>
   );
 }
