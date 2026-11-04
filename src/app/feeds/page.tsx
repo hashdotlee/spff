@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import type { Post, Profile } from '@/types/database';
+import type { Post, Profile, Warehouse } from '@/types/database';
 import { DriverAvatar } from '@/components/common/DriverAvatar';
 import { getFeedsCache, setFeedsCache } from '@/lib/utils/feedsCache';
+import { reverseGeocode } from '@/lib/utils/geocoding';
 import {
   Send,
   ThumbsUp,
@@ -14,6 +15,11 @@ import {
   Trophy,
   ChevronRight,
   ChevronDown,
+  MapPin,
+  Building2,
+  Search,
+  X,
+  Loader2,
 } from 'lucide-react';
 
 function formatRelativeTime(dateString: string): string {
@@ -32,6 +38,33 @@ function formatRelativeTime(dateString: string): string {
   });
 }
 
+function renderMessageContent(text: string) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+
+  return parts.map((part, index) => {
+    if (part.match(urlRegex)) {
+      const isMap =
+        part.includes('maps.google.com') ||
+        part.includes('google.com/maps') ||
+        part.includes('goo.gl/maps');
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-orange-600 hover:text-orange-700 underline font-bold break-all inline-flex items-center gap-0.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {isMap ? '📍 Xem trên bản đồ' : part}
+        </a>
+      );
+    }
+    return <span key={index}>{part}</span>;
+  });
+}
+
 export default function FeedsPage() {
   const initialCache = getFeedsCache();
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
@@ -39,9 +72,15 @@ export default function FeedsPage() {
   const [posts, setPosts] = useState<Post[]>(initialCache.posts);
   const [loading, setLoading] = useState(!initialCache.hasCache);
   const [content, setContent] = useState('');
-  const [expandedPinned, setExpandedPinned] = useState<Record<string, boolean>>({});
   const [votingPostId, setVotingPostId] = useState<string | null>(null);
   const [isTopDriversExpanded, setIsTopDriversExpanded] = useState(false);
+
+  // Quick Action States
+  const [isLocating, setIsLocating] = useState(false);
+  const [isWarehousePickerOpen, setIsWarehousePickerOpen] = useState(false);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [loadingWarehouses, setLoadingWarehouses] = useState(false);
+  const [warehouseSearch, setWarehouseSearch] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialScrollDone = useRef(false);
@@ -228,17 +267,16 @@ export default function FeedsPage() {
   }, [loading, posts.length, scrollToBottom]);
 
   // 4. Gửi tin nhắn mới lên bảng tin (Tức thời, không hiển thị loading làm mất tập trung)
-  async function handleCreatePost(e: React.FormEvent) {
-    e.preventDefault();
+  async function sendFeedMessage(msgText: string) {
     if (!currentUser) {
       alert('Vui lòng đăng nhập để gửi tin nhắn!');
       return;
     }
 
-    const trimmed = content.trim();
+    const trimmed = msgText.trim();
     if (!trimmed) return;
-    if (trimmed.length > 300) {
-      alert('Nội dung tối đa 300 ký tự!');
+    if (trimmed.length > 500) {
+      alert('Nội dung quá dài!');
       return;
     }
 
@@ -260,13 +298,12 @@ export default function FeedsPage() {
       net_score: 0,
     };
 
-    // Đẩy ngay vào luồng chat và xóa ô input ngay lập tức
+    // Đẩy ngay vào luồng chat
     setPosts((prev) => {
       const updated = [...prev, optimisticPost];
       setFeedsCache(updated, topDrivers);
       return updated;
     });
-    setContent('');
     setTimeout(() => scrollToBottom(true), 40);
 
     try {
@@ -312,13 +349,100 @@ export default function FeedsPage() {
         });
       }
     } catch (err) {
-      console.error('Lỗi handleCreatePost:', err);
+      console.error('Lỗi sendFeedMessage:', err);
       setPosts((prev) => {
         const reverted = prev.filter((p) => p.id !== tempId);
         setFeedsCache(reverted, topDrivers);
         return reverted;
       });
     }
+  }
+
+  async function handleCreatePost(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    setContent('');
+    await sendFeedMessage(trimmed);
+  }
+
+  // Gửi định vị GPS hiện tại
+  async function handleSendCurrentLocation() {
+    if (!currentUser) {
+      alert('Vui lòng đăng nhập để gửi định vị!');
+      return;
+    }
+    if (isLocating) return;
+
+    if (!navigator.geolocation) {
+      alert('Thiết bị của bạn không hỗ trợ định vị GPS.');
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const addr = await reverseGeocode(latitude, longitude);
+          const mapUrl = `https://maps.google.com/?q=${latitude},${longitude}`;
+          const text = addr
+            ? `📍 Vị trí hiện tại: ${addr} - ${mapUrl}`
+            : `📍 Vị trí hiện tại: ${mapUrl}`;
+          await sendFeedMessage(text);
+        } catch (err) {
+          console.error('Lỗi khi gửi định vị:', err);
+        } finally {
+          setIsLocating(false);
+        }
+      },
+      (err) => {
+        console.warn('Lỗi lấy vị trí GPS:', err);
+        alert('Không thể lấy vị trí hiện tại. Vui lòng bật quyền truy cập GPS!');
+        setIsLocating(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+      }
+    );
+  }
+
+  // Mở modal chọn kho
+  async function handleOpenWarehousePicker() {
+    if (!currentUser) {
+      alert('Vui lòng đăng nhập để gửi định vị kho!');
+      return;
+    }
+    setIsWarehousePickerOpen(true);
+    if (warehouses.length === 0) {
+      setLoadingWarehouses(true);
+      try {
+        const { data } = await supabase
+          .from('warehouses')
+          .select('*')
+          .eq('status', 'active')
+          .order('name', { ascending: true })
+          .limit(100);
+        if (data) {
+          setWarehouses(data as Warehouse[]);
+        }
+      } catch (err) {
+        console.warn('Lỗi tải danh sách kho:', err);
+      } finally {
+        setLoadingWarehouses(false);
+      }
+    }
+  }
+
+  // Chọn kho để gửi định vị
+  async function handleSelectWarehouse(wh: Warehouse) {
+    setIsWarehousePickerOpen(false);
+    const mapUrl = `https://maps.google.com/?q=${wh.latitude},${wh.longitude}`;
+    const text = wh.address
+      ? `🏢 Kho ${wh.name}: ${wh.address} - ${mapUrl}`
+      : `🏢 Kho ${wh.name} - ${mapUrl}`;
+    await sendFeedMessage(text);
   }
 
   // 5. Xử lý Vote (Upvote / Downvote - Cập nhật sau khi hoàn tất để tránh giật lag)
@@ -413,7 +537,7 @@ export default function FeedsPage() {
   }
 
   return (
-    <div className="p-3 sm:p-4 pb-20 sm:pb-24 space-y-3 max-w-xl mx-auto w-full flex-1 flex flex-col justify-between">
+    <div className="p-3 sm:p-4 pb-28 sm:pb-32 space-y-3 max-w-xl mx-auto w-full flex-1 flex flex-col justify-between">
       <div className="space-y-3">
         {/* 1. Vinh danh Bác tài tiêu biểu trên đầu (Mặc định thu gọn, mở rộng khi cần) */}
         <div className="bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border border-amber-200/80 rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2.5 shadow-2xs transition-all">
@@ -494,65 +618,38 @@ export default function FeedsPage() {
           )}
         </div>
 
-        {/* 2. Tin nhắn được nhiều Upvote nhất được ghim lại ở Top (Tối đa 3 tin, phân biệt bằng màu ấm) */}
+        {/* 2. Tin nhắn được nhiều Upvote nhất được ghim lại ở Top (Tối đa 3 tin, tối đa 1 dòng, phân biệt bằng màu ấm) */}
         {pinnedPosts.length > 0 && (
           <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/5 border border-amber-300/80 rounded-2xl p-2 sm:p-2.5 shadow-2xs">
             {/* Hàng ngang cuộn lướt sang tiết kiệm không gian */}
             <div className="flex items-start gap-2.5 overflow-x-auto no-scrollbar snap-x py-0.5">
-              {pinnedPosts.map((post) => {
-                const isExpanded = Boolean(expandedPinned[post.id]);
-                const isLong = post.content.length > 60 || post.content.includes('\n');
-
-                return (
-                  <div
-                    key={`pinned-${post.id}`}
-                    onClick={() => scrollToPost(post.id)}
-                    className="w-[220px] xs:w-[250px] sm:w-[270px] shrink-0 snap-start bg-white/95 hover:bg-white border border-amber-200/80 rounded-xl p-2.5 transition cursor-pointer active:scale-[0.99] shadow-2xs flex flex-col justify-between"
-                    title="Bấm để cuộn đến tin nhắn này trong đoạn chat"
-                  >
-                    <div>
-                      {/* Header tin ghim: Avatar + Tên + Điểm upvote */}
-                      <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <DriverAvatar profile={post.user} size="xs" showStars={true} />
-                          <span className="text-[11px] font-bold text-slate-900 truncate">
-                            {post.user?.full_name || 'Bác tài'}
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 flex items-center gap-0.5 shrink-0">
-                          <ThumbsUp className="w-2.5 h-2.5" />
-                          <span>+{post.net_score}</span>
-                        </span>
-                      </div>
-
-                      {/* Nội dung tối đa 2 dòng + Xem thêm/Rút gọn */}
-                      <p
-                        className={`text-xs text-slate-700 leading-relaxed break-words ${
-                          isExpanded ? 'whitespace-pre-wrap' : 'line-clamp-2'
-                        }`}
-                      >
-                        {post.content}
-                      </p>
+              {pinnedPosts.map((post) => (
+                <div
+                  key={`pinned-${post.id}`}
+                  onClick={() => scrollToPost(post.id)}
+                  className="w-[200px] xs:w-[230px] sm:w-[250px] shrink-0 snap-start bg-white/95 hover:bg-white border border-amber-200/80 rounded-xl p-2 transition cursor-pointer active:scale-[0.99] shadow-2xs flex flex-col justify-between"
+                  title="Bấm để cuộn đến tin nhắn này trong đoạn chat"
+                >
+                  {/* Header tin ghim: Avatar + Tên + Điểm upvote */}
+                  <div className="flex items-center justify-between gap-1.5 mb-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <DriverAvatar profile={post.user} size="xs" showStars={true} />
+                      <span className="text-[11px] font-bold text-slate-900 truncate">
+                        {post.user?.full_name || 'Bác tài'}
+                      </span>
                     </div>
-
-                    {isLong && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setExpandedPinned((prev) => ({
-                            ...prev,
-                            [post.id]: !prev[post.id],
-                          }));
-                        }}
-                        className="text-[10px] font-bold text-orange-600 hover:text-orange-700 self-start mt-1 cursor-pointer"
-                      >
-                        {isExpanded ? 'Rút gọn' : '... Xem thêm'}
-                      </button>
-                    )}
+                    <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 flex items-center gap-0.5 shrink-0">
+                      <ThumbsUp className="w-2.5 h-2.5" />
+                      <span>+{post.net_score}</span>
+                    </span>
                   </div>
-                );
-              })}
+
+                  {/* Nội dung tối đa 1 dòng */}
+                  <p className="text-xs text-slate-700 leading-tight truncate">
+                    {post.content}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -631,7 +728,7 @@ export default function FeedsPage() {
                       }`}
                     >
                       <p className="text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-wrap break-words">
-                        {post.content}
+                        {renderMessageContent(post.content)}
                       </p>
 
                       {/* Cụm Upvote / Downvote thu gọn như reaction chat */}
@@ -696,8 +793,37 @@ export default function FeedsPage() {
       </div>
 
       {/* 3. Khung nhập tin nhắn Chat Cố Định Ở Đáy (Trên thanh BottomNavigation) */}
-      <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] sm:bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] p-2 sm:p-3">
-        <div className="max-w-xl mx-auto w-full">
+      <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] sm:bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] p-2 sm:p-2.5">
+        <div className="max-w-xl mx-auto w-full space-y-1.5">
+          {/* Nút chức năng nhanh - Chỉ icon tối giản */}
+          {currentUser && (
+            <div className="flex items-center gap-1.5 px-0.5">
+              <button
+                type="button"
+                onClick={handleSendCurrentLocation}
+                disabled={isLocating}
+                className="p-1.5 bg-slate-100 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-lg border border-slate-200/80 transition active:scale-90 cursor-pointer disabled:opacity-50"
+                title="Gửi định vị hiện tại"
+              >
+                {isLocating ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-orange-600" />
+                ) : (
+                  <MapPin className="w-4 h-4 text-orange-600" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenWarehousePicker}
+                className="p-1.5 bg-slate-100 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-lg border border-slate-200/80 transition active:scale-90 cursor-pointer"
+                title="Gửi định vị kho"
+              >
+                <Building2 className="w-4 h-4 text-amber-600" />
+              </button>
+            </div>
+          )}
+
+          {/* Form nhập tin nhắn */}
           {currentUser ? (
             <form onSubmit={handleCreatePost} className="flex items-center gap-2">
               <DriverAvatar profile={currentUser} size="sm" showStars={true} />
@@ -732,6 +858,105 @@ export default function FeedsPage() {
           )}
         </div>
       </div>
+
+      {/* Modal Chọn Kho Để Gửi Định Vị */}
+      {isWarehousePickerOpen && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in"
+          onClick={() => setIsWarehousePickerOpen(false)}
+        >
+          <div
+            className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[80vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Chọn kho gửi định vị</h3>
+                  <p className="text-[11px] text-slate-500">Bấm vào kho để chia sẻ vị trí vào chat</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWarehousePickerOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition active:scale-95 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Ô tìm kiếm */}
+            <div className="p-3 border-b border-slate-100">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={warehouseSearch}
+                  onChange={(e) => setWarehouseSearch(e.target.value)}
+                  placeholder="Tìm tên kho, địa chỉ..."
+                  className="w-full pl-9 pr-3 py-2 bg-slate-100 focus:bg-white border border-slate-200 focus:border-orange-500 rounded-xl text-xs focus:outline-none transition"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Danh sách kho */}
+            <div className="overflow-y-auto divide-y divide-slate-100 flex-1 p-1 max-h-[50vh]">
+              {loadingWarehouses ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="w-6 h-6 animate-spin text-orange-600" />
+                </div>
+              ) : (
+                (() => {
+                  const filtered = warehouses.filter((wh) => {
+                    const q = warehouseSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    return (
+                      wh.name.toLowerCase().includes(q) ||
+                      (wh.address && wh.address.toLowerCase().includes(q))
+                    );
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="py-8 text-center text-xs text-slate-400">
+                        Không tìm thấy kho nào
+                      </div>
+                    );
+                  }
+
+                  return filtered.map((wh) => (
+                    <button
+                      key={wh.id}
+                      type="button"
+                      onClick={() => handleSelectWarehouse(wh)}
+                      className="w-full text-left p-2.5 hover:bg-orange-50/60 rounded-xl flex items-start gap-2.5 transition active:scale-[0.99] cursor-pointer group"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-slate-100 group-hover:bg-orange-100 text-slate-500 group-hover:text-orange-600 flex items-center justify-center shrink-0 transition mt-0.5">
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-bold text-slate-900 group-hover:text-orange-900 truncate">
+                          {wh.name}
+                        </div>
+                        {wh.address && (
+                          <div className="text-[11px] text-slate-500 truncate mt-0.5">
+                            {wh.address}
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  ));
+                })()
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
