@@ -13,7 +13,6 @@ import {
   Trash2,
   Trophy,
   ChevronRight,
-  Pin,
 } from 'lucide-react';
 
 function formatRelativeTime(dateString: string): string {
@@ -40,9 +39,11 @@ export default function FeedsPage() {
   const [loading, setLoading] = useState(!initialCache.hasCache);
   const [content, setContent] = useState('');
   const [expandedPinned, setExpandedPinned] = useState<Record<string, boolean>>({});
+  const [votingPostId, setVotingPostId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialScrollDone = useRef(false);
+  const lastVoteTimeRef = useRef<number>(0);
 
   const supabase = createClient();
 
@@ -193,25 +194,25 @@ export default function FeedsPage() {
     loadPosts(true);
 
     // Lắng nghe realtime các tin nhắn mới (chạy ngầm hoàn toàn, không loading giật màn hình)
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const channel = supabase
       .channel('feeds_realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'posts' },
         () => {
-          loadPosts(false);
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'post_votes' },
-        () => {
-          loadPosts(false);
+          // Bỏ qua nếu người dùng vừa mới thực hiện thao tác vote trong vòng 2 giây
+          if (Date.now() - lastVoteTimeRef.current < 2000) return;
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            loadPosts(false);
+          }, 400);
         }
       )
       .subscribe();
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
   }, [loadPosts]);
@@ -318,45 +319,20 @@ export default function FeedsPage() {
     }
   }
 
-  // 5. Xử lý Vote (Upvote / Downvote - Cập nhật tức thời, chạy ngầm)
+  // 5. Xử lý Vote (Upvote / Downvote - Cập nhật sau khi hoàn tất để tránh giật lag)
   async function handleVote(post: Post, intendedValue: 1 | -1) {
     if (!currentUser) {
       alert('Vui lòng đăng nhập để bình chọn tin nhắn!');
       return;
     }
 
+    if (votingPostId === post.id) return;
+
     const currentVote = post.user_vote;
-    let nextVote: number | null = intendedValue;
+    const nextVote: number | null = currentVote === intendedValue ? null : intendedValue;
 
-    if (currentVote === intendedValue) {
-      nextVote = null;
-    }
-
-    let deltaUp = 0;
-    let deltaDown = 0;
-
-    if (currentVote === 1) deltaUp -= 1;
-    if (currentVote === -1) deltaDown -= 1;
-
-    if (nextVote === 1) deltaUp += 1;
-    if (nextVote === -1) deltaDown += 1;
-
-    setPosts((prev) => {
-      const updated = prev.map((p) => {
-        if (p.id !== post.id) return p;
-        const newUp = Math.max(0, (p.upvotes_count || 0) + deltaUp);
-        const newDown = Math.max(0, (p.downvotes_count || 0) + deltaDown);
-        return {
-          ...p,
-          user_vote: nextVote,
-          upvotes_count: newUp,
-          downvotes_count: newDown,
-          net_score: newUp - newDown,
-        };
-      });
-      setFeedsCache(updated, topDrivers);
-      return updated;
-    });
+    setVotingPostId(post.id);
+    lastVoteTimeRef.current = Date.now();
 
     try {
       if (nextVote === null) {
@@ -375,9 +351,37 @@ export default function FeedsPage() {
           { onConflict: 'post_id,user_id' }
         );
       }
+
+      // Chỉ cập nhật hiển thị sau khi đã lưu DB thành công (không giật hiện rồi tắt)
+      let deltaUp = 0;
+      let deltaDown = 0;
+
+      if (currentVote === 1) deltaUp -= 1;
+      if (currentVote === -1) deltaDown -= 1;
+
+      if (nextVote === 1) deltaUp += 1;
+      if (nextVote === -1) deltaDown += 1;
+
+      setPosts((prev) => {
+        const updated = prev.map((p) => {
+          if (p.id !== post.id) return p;
+          const newUp = Math.max(0, (p.upvotes_count || 0) + deltaUp);
+          const newDown = Math.max(0, (p.downvotes_count || 0) + deltaDown);
+          return {
+            ...p,
+            user_vote: nextVote,
+            upvotes_count: newUp,
+            downvotes_count: newDown,
+            net_score: newUp - newDown,
+          };
+        });
+        setFeedsCache(updated, topDrivers);
+        return updated;
+      });
     } catch (err) {
       console.error('Lỗi khi gửi vote:', err);
-      loadPosts(false);
+    } finally {
+      setVotingPostId(null);
     }
   }
 
@@ -466,21 +470,9 @@ export default function FeedsPage() {
           </div>
         </div>
 
-        {/* 2. Tin nhắn được nhiều Upvote nhất được ghim lại ở Top (Tối đa 3 tin, hàng ngang lướt sang) */}
+        {/* 2. Tin nhắn được nhiều Upvote nhất được ghim lại ở Top (Tối đa 3 tin, phân biệt bằng màu ấm) */}
         {pinnedPosts.length > 0 && (
-          <div className="bg-gradient-to-r from-amber-50 to-orange-50/70 border border-amber-200/90 rounded-2xl p-2.5 sm:p-3 shadow-2xs space-y-2">
-            <div className="flex items-center justify-between gap-1 text-[11px] font-black text-amber-900 px-0.5">
-              <div className="flex items-center gap-1.5">
-                <Pin className="w-3.5 h-3.5 text-orange-600 fill-orange-500 -rotate-45 shrink-0" />
-                <span className="uppercase tracking-tight text-[10px] sm:text-[11px]">
-                  Tin Ghim Nổi Bật ({pinnedPosts.length} tin nhiều vote & mới nhất)
-                </span>
-              </div>
-              <span className="text-[10px] font-bold text-amber-700/80">
-                Lướt ngang &rarr;
-              </span>
-            </div>
-
+          <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/5 border border-amber-300/80 rounded-2xl p-2 sm:p-2.5 shadow-2xs">
             {/* Hàng ngang cuộn lướt sang tiết kiệm không gian */}
             <div className="flex items-start gap-2.5 overflow-x-auto no-scrollbar snap-x py-0.5">
               {pinnedPosts.map((post) => {
@@ -587,9 +579,8 @@ export default function FeedsPage() {
                         {post.user?.full_name || 'Bác tài'}
                       </Link>
                       {isPinned && (
-                        <span className="inline-flex items-center gap-0.5 text-[9px] font-black text-amber-800 bg-amber-100 border border-amber-200 rounded px-1 py-0.2 shrink-0">
-                          <Pin className="w-2.5 h-2.5 fill-amber-600 -rotate-45" />
-                          <span>Ghim Top</span>
+                        <span className="text-[9px] font-black text-amber-800 bg-amber-100/80 border border-amber-200/80 rounded px-1 py-0.2 shrink-0">
+                          Top
                         </span>
                       )}
                       <span className="text-[10px] text-slate-400 font-medium">
@@ -623,8 +614,11 @@ export default function FeedsPage() {
                       <div className="flex items-center justify-end gap-1 mt-1 pt-1 border-t border-slate-100/80">
                         <button
                           type="button"
+                          disabled={votingPostId === post.id}
                           onClick={() => handleVote(post, 1)}
                           className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold transition flex items-center gap-0.5 cursor-pointer active:scale-95 ${
+                            votingPostId === post.id ? 'opacity-60 cursor-wait' : ''
+                          } ${
                             post.user_vote === 1
                               ? 'bg-emerald-100 text-emerald-800'
                               : 'text-slate-400 hover:text-emerald-700 hover:bg-slate-50'
@@ -651,8 +645,11 @@ export default function FeedsPage() {
 
                         <button
                           type="button"
+                          disabled={votingPostId === post.id}
                           onClick={() => handleVote(post, -1)}
                           className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold transition flex items-center gap-0.5 cursor-pointer active:scale-95 ${
+                            votingPostId === post.id ? 'opacity-60 cursor-wait' : ''
+                          } ${
                             post.user_vote === -1
                               ? 'bg-rose-100 text-rose-800'
                               : 'text-slate-400 hover:text-rose-700 hover:bg-slate-50'
