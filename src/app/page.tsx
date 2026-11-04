@@ -242,6 +242,31 @@ export default function HomePage() {
     }
   }
 
+  // Xóa điểm báo ngập (khi người dùng nhấn giữ icon 🌊 trên bản đồ)
+  async function handleDeleteFloodReport(floodId: string) {
+    if (!window.confirm('Bạn có muốn xóa điểm báo ngập này không?\n(Nước đã rút hoặc báo nhầm)')) {
+      return;
+    }
+
+    // Xóa ngay lập tức trên bản đồ (Optimistic update)
+    setFloodReports((prev) => prev.filter((f) => f.id !== floodId));
+
+    try {
+      const { error } = await supabase
+        .from('flood_reports')
+        .delete()
+        .eq('id', floodId);
+
+      if (error) {
+        console.warn('Lỗi xóa flood report trên server:', error);
+      } else {
+        alert('🌊 Đã xóa điểm báo ngập thành công!');
+      }
+    } catch (err) {
+      console.warn('Lỗi mạng khi xóa flood report:', err);
+    }
+  }
+
   useEffect(() => {
     setCurrentHour(new Date().getHours());
     requestLocation();
@@ -569,6 +594,7 @@ export default function HomePage() {
           onSelectIncident={(inc) => setSelectedIncident(inc)}
           onRateOrder={(wh) => setRatingModalContext({ mode: 'warehouse', warehouse: wh })}
           onRateCurrentLocation={() => setRatingModalContext({ mode: 'current_location' })}
+          onDeleteFloodReport={handleDeleteFloodReport}
           className="h-64 sm:h-80 w-full rounded-2xl overflow-hidden shadow-xs border border-slate-200"
         />
 

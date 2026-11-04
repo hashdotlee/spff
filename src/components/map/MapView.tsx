@@ -25,6 +25,7 @@ interface MapViewProps {
   onSelectIncident?: (incident: Incident) => void;
   onRateOrder?: (warehouse: Warehouse) => void;
   onRateCurrentLocation?: () => void;
+  onDeleteFloodReport?: (floodId: string) => void;
   className?: string;
 }
 
@@ -41,6 +42,7 @@ export default function MapView({
   onSelectIncident,
   onRateOrder,
   onRateCurrentLocation,
+  onDeleteFloodReport,
   className = 'h-80 w-full rounded-2xl overflow-hidden shadow-inner',
 }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -131,11 +133,18 @@ export default function MapView({
       }
     };
 
+    (window as any).__spff_delete_flood_report = (floodId: string) => {
+      if (onDeleteFloodReport) {
+        onDeleteFloodReport(floodId);
+      }
+    };
+
     return () => {
       delete (window as any).__spff_rate_warehouse_order;
       delete (window as any).__spff_rate_current_location;
+      delete (window as any).__spff_delete_flood_report;
     };
-  }, [warehouses, onRateOrder, onRateCurrentLocation]);
+  }, [warehouses, onRateOrder, onRateCurrentLocation, onDeleteFloodReport]);
 
   // Update center when userLocation is first received or updated
   useEffect(() => {
@@ -482,7 +491,7 @@ export default function MapView({
       const floodIcon = L.divIcon({
         className: 'custom-flood-pin-container',
         html: `
-          <div style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;">
+          <div id="flood-pin-${flood.id}" style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: manipulation;" title="Nhấn giữ icon để xóa điểm ngập này">
             <div style="position: absolute; inset: -4px; border-radius: 50%; background: rgba(6, 182, 212, 0.4); animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
             <div style="background: linear-gradient(135deg, #0284c7, #06b6d4); width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2.5px solid #ffffff; box-shadow: 0 4px 10px rgba(2, 132, 199, 0.5);">
               <span style="font-size: 15px; line-height: 1;">🌊</span>
@@ -503,6 +512,57 @@ export default function MapView({
         markersLayer
       );
 
+      // Gắn sự kiện nhấn giữ (Long Press) trực tiếp trên icon ghim để xóa
+      const attachLongPress = () => {
+        const el = marker.getElement() || document.getElementById(`flood-pin-${flood.id}`);
+        if (!el) return;
+
+        let pressTimer: ReturnType<typeof setTimeout> | null = null;
+        let isLongPressTriggered = false;
+
+        const onTouchStart = () => {
+          isLongPressTriggered = false;
+          if (pressTimer) clearTimeout(pressTimer);
+          pressTimer = setTimeout(() => {
+            isLongPressTriggered = true;
+            if (marker.isPopupOpen && marker.isPopupOpen()) {
+              marker.closePopup();
+            }
+            if (typeof window !== 'undefined' && window.navigator?.vibrate) {
+              try { window.navigator.vibrate(50); } catch (_) {}
+            }
+            if (onDeleteFloodReport) {
+              onDeleteFloodReport(flood.id);
+            }
+          }, 550);
+        };
+
+        const onTouchEnd = (e?: Event) => {
+          if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+          }
+          if (isLongPressTriggered && e) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        };
+
+        el.addEventListener('touchstart', onTouchStart, { passive: true });
+        el.addEventListener('touchend', onTouchEnd);
+        el.addEventListener('touchmove', onTouchEnd, { passive: true });
+        el.addEventListener('touchcancel', onTouchEnd);
+
+        el.addEventListener('mousedown', onTouchStart);
+        el.addEventListener('mouseup', onTouchEnd);
+        el.addEventListener('mouseleave', onTouchEnd);
+        el.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+        });
+      };
+
+      setTimeout(attachLongPress, 40);
+
       marker.bindPopup(`
         <div class="p-1 max-w-[200px]">
           <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
@@ -518,6 +578,15 @@ export default function MapView({
           <span style="font-size: 10px; color: #0284c7; font-weight: 600; display: block; margin-top: 4px;">
             ⚠️ Đường ngập sâu, các bác tài lưu ý đi chậm hoặc tránh đoạn này!
           </span>
+          <div style="margin-top: 6px; padding-top: 5px; border-top: 1px dashed #e2e8f0;">
+            <span style="font-size: 9px; color: #64748b; display: block; margin-bottom: 3px; font-style: italic;">
+              💡 Nhấn giữ icon 🌊 trên bản đồ để xóa nhanh
+            </span>
+            <button onclick="window.__spff_delete_flood_report && window.__spff_delete_flood_report('${flood.id}')"
+              style="cursor: pointer; width: 100%; padding: 4px 6px; background-color: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; border-radius: 6px; font-size: 10px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 4px;">
+              🗑️ Xóa điểm báo ngập này
+            </button>
+          </div>
         </div>
       `);
     });
@@ -533,6 +602,7 @@ export default function MapView({
     onSelectWarehouse,
     onSelectIncident,
     onRateCurrentLocation,
+    onDeleteFloodReport,
   ]);
 
   return (

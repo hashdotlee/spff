@@ -34,14 +34,12 @@ CREATE POLICY "Anyone can report flood"
 ON public.flood_reports
 FOR INSERT WITH CHECK (true);
 
--- 3. Xóa điểm ngập: Người tạo hoặc Admin
+-- 3. Xóa điểm ngập: Bác tài hoặc Admin có thể xóa khi nước đã rút
 DROP POLICY IF EXISTS "Users and admins can delete flood reports" ON public.flood_reports;
-CREATE POLICY "Users and admins can delete flood reports" 
+DROP POLICY IF EXISTS "Anyone can delete flood reports" ON public.flood_reports;
+CREATE POLICY "Anyone can delete flood reports" 
 ON public.flood_reports
-FOR DELETE USING (
-  auth.uid() = user_id OR 
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-);
+FOR DELETE USING (true);
 
 -- Kích hoạt realtime
 ALTER PUBLICATION supabase_realtime ADD TABLE public.flood_reports;

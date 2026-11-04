@@ -13,6 +13,7 @@ import {
   Trash2,
   Trophy,
   ChevronRight,
+  ChevronDown,
 } from 'lucide-react';
 
 function formatRelativeTime(dateString: string): string {
@@ -40,6 +41,7 @@ export default function FeedsPage() {
   const [content, setContent] = useState('');
   const [expandedPinned, setExpandedPinned] = useState<Record<string, boolean>>({});
   const [votingPostId, setVotingPostId] = useState<string | null>(null);
+  const [isTopDriversExpanded, setIsTopDriversExpanded] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialScrollDone = useRef(false);
@@ -413,61 +415,83 @@ export default function FeedsPage() {
   return (
     <div className="p-3 sm:p-4 pb-20 sm:pb-24 space-y-3 max-w-xl mx-auto w-full flex-1 flex flex-col justify-between">
       <div className="space-y-3">
-        {/* 1. Vinh danh Bác tài tiêu biểu trên đầu */}
-        <div className="bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border border-amber-200/80 rounded-2xl p-3 sm:p-3.5 shadow-2xs">
-          <div className="flex items-center justify-between gap-2 mb-2.5">
-            <div className="flex items-center gap-1.5">
-              <Trophy className="w-4 h-4 text-amber-600 fill-amber-100" />
-              <h2 className="text-xs font-black text-slate-900 uppercase tracking-tight">
-                Bác Tài Tiêu Biểu
-              </h2>
-            </div>
+        {/* 1. Vinh danh Bác tài tiêu biểu trên đầu (Mặc định thu gọn, mở rộng khi cần) */}
+        <div className="bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border border-amber-200/80 rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2.5 shadow-2xs transition-all">
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setIsTopDriversExpanded((prev) => !prev)}
+              className="flex items-center gap-2 group cursor-pointer text-left py-0.5 active:scale-98 transition min-w-0"
+              title={isTopDriversExpanded ? 'Bấm để thu gọn danh sách' : 'Bấm để mở danh sách Bác tài tiêu biểu'}
+            >
+              <div className="w-6 h-6 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 shrink-0 group-hover:bg-amber-200 transition">
+                <Trophy className="w-3.5 h-3.5 fill-amber-500 text-amber-600" />
+              </div>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h2 className="text-xs font-black text-slate-900 uppercase tracking-tight truncate">
+                  Bác Tài Tiêu Biểu
+                </h2>
+                {topDrivers.length > 0 && (
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100/80 px-1.5 py-0.2 rounded-full border border-amber-200 shrink-0">
+                    {topDrivers.length}
+                  </span>
+                )}
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-slate-400 group-hover:text-amber-800 transition-transform duration-200 shrink-0 ${
+                    isTopDriversExpanded ? 'rotate-180 text-amber-800' : ''
+                  }`}
+                />
+              </div>
+            </button>
+
             <Link
               href="/leaderboard"
-              className="text-[11px] font-bold text-amber-800 hover:text-amber-950 flex items-center gap-0.5 active:scale-95 transition"
+              className="text-[11px] font-bold text-amber-800 hover:text-amber-950 flex items-center gap-0.5 active:scale-95 transition shrink-0"
             >
               <span>Bảng vàng</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
 
-          {/* Carousel Top Drivers */}
-          <div className="flex items-center gap-3 overflow-x-auto no-scrollbar py-1">
-            {topDrivers.length === 0 ? (
-              <div className="text-[11px] text-slate-400 italic py-1">Đang tải danh sách...</div>
-            ) : (
-              topDrivers.map((driver, index) => (
-                <Link
-                  key={driver.id}
-                  href={`/profile/${driver.id}`}
-                  className="flex flex-col items-center gap-1 group shrink-0 active:scale-95 transition"
-                >
-                  <div className="relative pt-1 pb-1">
-                    <DriverAvatar profile={driver} size="md" showStars={true} />
-                    {index < 3 && (
-                      <span
-                        className={`absolute -top-1 -right-1 text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white shadow-2xs ${
-                          index === 0
-                            ? 'bg-amber-400 text-slate-900'
-                            : index === 1
-                            ? 'bg-slate-300 text-slate-900'
-                            : 'bg-amber-700 text-white'
-                        }`}
-                      >
-                        {index + 1}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[11px] font-bold text-slate-800 max-w-[68px] truncate text-center">
-                    {driver.full_name?.split(' ').slice(-1)[0] || 'Bác tài'}
-                  </span>
-                  <span className="text-[9px] font-extrabold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded-full border border-amber-200">
-                    {driver.reputation_score}đ
-                  </span>
-                </Link>
-              ))
-            )}
-          </div>
+          {/* Carousel Top Drivers khi mở rộng */}
+          {isTopDriversExpanded && (
+            <div className="mt-2.5 pt-2 border-t border-amber-200/60 flex items-center gap-3 overflow-x-auto no-scrollbar py-1 animate-in fade-in duration-200">
+              {topDrivers.length === 0 ? (
+                <div className="text-[11px] text-slate-400 italic py-1">Đang tải danh sách...</div>
+              ) : (
+                topDrivers.map((driver, index) => (
+                  <Link
+                    key={driver.id}
+                    href={`/profile/${driver.id}`}
+                    className="flex flex-col items-center gap-1 group shrink-0 active:scale-95 transition"
+                  >
+                    <div className="relative pt-1 pb-1">
+                      <DriverAvatar profile={driver} size="md" showStars={true} />
+                      {index < 3 && (
+                        <span
+                          className={`absolute -top-1 -right-1 text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white shadow-2xs ${
+                            index === 0
+                              ? 'bg-amber-400 text-slate-900'
+                              : index === 1
+                              ? 'bg-slate-300 text-slate-900'
+                              : 'bg-amber-700 text-white'
+                          }`}
+                        >
+                          {index + 1}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-800 max-w-[68px] truncate text-center">
+                      {driver.full_name?.split(' ').slice(-1)[0] || 'Bác tài'}
+                    </span>
+                    <span className="text-[9px] font-extrabold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded-full border border-amber-200">
+                      {driver.reputation_score}đ
+                    </span>
+                  </Link>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
         {/* 2. Tin nhắn được nhiều Upvote nhất được ghim lại ở Top (Tối đa 3 tin, phân biệt bằng màu ấm) */}

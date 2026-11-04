@@ -912,11 +912,9 @@ CREATE POLICY "Anyone can report flood" ON public.flood_reports
     FOR INSERT WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Users and admins can delete flood reports" ON public.flood_reports;
-CREATE POLICY "Users and admins can delete flood reports" ON public.flood_reports
-    FOR DELETE USING (
-      auth.uid() = user_id OR 
-      EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-    );
+DROP POLICY IF EXISTS "Anyone can delete flood reports" ON public.flood_reports;
+CREATE POLICY "Anyone can delete flood reports" ON public.flood_reports
+    FOR DELETE USING (true);
 
 DO $$
 BEGIN
