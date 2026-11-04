@@ -203,7 +203,6 @@ export default function HomePage() {
   async function handleReportFlood() {
     if (!userLocation) {
       requestLocation();
-      alert('Đang kích hoạt định vị GPS. Vui lòng cho phép quyền truy cập vị trí và bấm lại!');
       return;
     }
 
@@ -222,7 +221,7 @@ export default function HomePage() {
       user_id: currentUserId,
     };
 
-    // Hiển thị ngay tức thời trên bản đồ (Optimistic update)
+    // Hiển thị ngay tức thời trên bản đồ (Optimistic update, không cần popup)
     setFloodReports((prev) => [newReport, ...prev]);
 
     try {
@@ -233,21 +232,15 @@ export default function HomePage() {
         note: newReport.note,
         user_id: currentUserId,
       });
-      alert('🌊 Đã đánh dấu điểm ngập tại vị trí của bạn để cảnh báo anh em đồng nghiệp!');
     } catch (err) {
       console.warn('Lỗi gửi flood report:', err);
-      alert('🌊 Đã ghi nhận điểm ngập tại vị trí của bạn!');
     } finally {
       setSubmittingFlood(false);
     }
   }
 
-  // Xóa điểm báo ngập (khi người dùng nhấn giữ icon 🌊 trên bản đồ)
+  // Xóa điểm báo ngập (khi nhấn giữ icon 🌊 trên bản đồ, xóa ngay không cần xác nhận hay thông báo)
   async function handleDeleteFloodReport(floodId: string) {
-    if (!window.confirm('Bạn có muốn xóa điểm báo ngập này không?\n(Nước đã rút hoặc báo nhầm)')) {
-      return;
-    }
-
     // Xóa ngay lập tức trên bản đồ (Optimistic update)
     setFloodReports((prev) => prev.filter((f) => f.id !== floodId));
 
@@ -259,8 +252,6 @@ export default function HomePage() {
 
       if (error) {
         console.warn('Lỗi xóa flood report trên server:', error);
-      } else {
-        alert('🌊 Đã xóa điểm báo ngập thành công!');
       }
     } catch (err) {
       console.warn('Lỗi mạng khi xóa flood report:', err);

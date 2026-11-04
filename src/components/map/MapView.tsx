@@ -134,6 +134,9 @@ export default function MapView({
     };
 
     (window as any).__spff_delete_flood_report = (floodId: string) => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.closePopup();
+      }
       if (onDeleteFloodReport) {
         onDeleteFloodReport(floodId);
       }
