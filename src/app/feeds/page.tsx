@@ -13,6 +13,7 @@ import {
   Loader2,
   Trophy,
   ChevronRight,
+  Pin,
 } from 'lucide-react';
 
 function formatRelativeTime(dateString: string): string {
@@ -43,6 +44,23 @@ export default function FeedsPage() {
   const isInitialScrollDone = useRef(false);
 
   const supabase = createClient();
+
+  // Lấy các tin nhắn có nhiều upvote nhất (net_score > 0, sắp xếp giảm dần, tối đa 3 tin)
+  const pinnedPosts = [...posts]
+    .filter((p) => (p.net_score ?? 0) > 0)
+    .sort((a, b) => (b.net_score ?? 0) - (a.net_score ?? 0))
+    .slice(0, 3);
+
+  const scrollToPost = (postId: string) => {
+    const el = document.getElementById(`post-${postId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('ring-2', 'ring-orange-500', 'bg-orange-50/50');
+      setTimeout(() => {
+        el.classList.remove('ring-2', 'ring-orange-500', 'bg-orange-50/50');
+      }, 2000);
+    }
+  };
 
   const scrollToBottom = useCallback((smooth = true) => {
     messagesEndRef.current?.scrollIntoView({
@@ -384,7 +402,51 @@ export default function FeedsPage() {
           </div>
         </div>
 
-        {/* 2. Luồng Tin Nhắn Chat (Từ trên xuống dưới, tin mới nhất ở đáy) */}
+        {/* 2. Tin nhắn được nhiều Upvote nhất được ghim lại ở Top */}
+        {pinnedPosts.length > 0 && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50/70 border border-amber-200/90 rounded-2xl p-2.5 sm:p-3 shadow-2xs space-y-1.5">
+            <div className="flex items-center justify-between gap-1 text-[11px] font-black text-amber-900">
+              <div className="flex items-center gap-1.5">
+                <Pin className="w-3.5 h-3.5 text-orange-600 fill-orange-500 -rotate-45 shrink-0" />
+                <span className="uppercase tracking-tight text-[10px] sm:text-[11px]">
+                  Tin Ghim Nhiều Upvote Nhất
+                </span>
+              </div>
+              <span className="text-[10px] font-extrabold text-amber-800 bg-amber-200/60 px-1.5 py-0.2 rounded-full shrink-0">
+                Top {pinnedPosts.length}
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              {pinnedPosts.map((post) => (
+                <div
+                  key={`pinned-${post.id}`}
+                  onClick={() => scrollToPost(post.id)}
+                  className="flex items-start gap-2 bg-white/95 hover:bg-white border border-amber-200/70 rounded-xl p-2 transition cursor-pointer active:scale-[0.99] shadow-2xs"
+                  title="Bấm để cuộn đến tin nhắn này trong đoạn chat"
+                >
+                  <DriverAvatar profile={post.user} size="xs" showStars={true} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[11px] font-bold text-slate-900 truncate">
+                        {post.user?.full_name || 'Bác tài'}
+                      </span>
+                      <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 flex items-center gap-0.5 shrink-0">
+                        <ThumbsUp className="w-2.5 h-2.5" />
+                        <span>+{post.net_score}</span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-700 line-clamp-2 leading-relaxed mt-0.5">
+                      {post.content}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 3. Luồng Tin Nhắn Chat (Từ trên xuống dưới, tin mới nhất ở đáy) */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="w-7 h-7 border-3 border-orange-500 border-t-transparent rounded-full animate-spin" />
@@ -401,11 +463,15 @@ export default function FeedsPage() {
             {posts.map((post) => {
               const isAuthor = Boolean(currentUser && post.user_id === currentUser.id);
               const isAdmin = currentUser?.role === 'admin';
+              const isPinned = pinnedPosts.some((p) => p.id === post.id);
 
               return (
                 <div
                   key={post.id}
-                  className="flex items-start gap-2 sm:gap-2.5 group"
+                  id={`post-${post.id}`}
+                  className={`flex items-start gap-2 sm:gap-2.5 group transition duration-300 rounded-2xl p-1 -m-1 ${
+                    isPinned ? 'bg-amber-50/30' : ''
+                  }`}
                 >
                   {/* Avatar kèm sao dưới avatar */}
                   <DriverAvatar
@@ -425,6 +491,12 @@ export default function FeedsPage() {
                       >
                         {post.user?.full_name || 'Bác tài'}
                       </Link>
+                      {isPinned && (
+                        <span className="inline-flex items-center gap-0.5 text-[9px] font-black text-amber-800 bg-amber-100 border border-amber-200 rounded px-1 py-0.2 shrink-0">
+                          <Pin className="w-2.5 h-2.5 fill-amber-600 -rotate-45" />
+                          <span>Ghim Top</span>
+                        </span>
+                      )}
                       <span className="text-[10px] text-slate-400 font-medium">
                         {formatRelativeTime(post.created_at)}
                       </span>
@@ -441,7 +513,13 @@ export default function FeedsPage() {
                     </div>
 
                     {/* Bong bóng nội dung chat + Reaction Upvote/Downvote */}
-                    <div className="inline-block max-w-full sm:max-w-[90%] bg-white border border-slate-200/90 rounded-2xl rounded-tl-xs px-3 py-2 shadow-2xs">
+                    <div
+                      className={`inline-block max-w-full sm:max-w-[90%] rounded-2xl rounded-tl-xs px-3 py-2 shadow-2xs border ${
+                        isPinned
+                          ? 'bg-amber-50/50 border-amber-200'
+                          : 'bg-white border-slate-200/90'
+                      }`}
+                    >
                       <p className="text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-wrap break-words">
                         {post.content}
                       </p>
