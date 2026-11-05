@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { MapPin, User, ShieldAlert, Award, Siren } from 'lucide-react';
+import { MapPin, User, ShieldAlert, Award, Siren, Gamepad2 } from 'lucide-react';
 import type { Profile } from '@/types/database';
 
 export function Navbar() {
@@ -138,6 +138,16 @@ export function Navbar() {
         </Link>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Game 8H Link */}
+          <Link
+            href="/game"
+            className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-full text-xs font-bold transition flex items-center gap-1 active:scale-95 shrink-0"
+            title="Game mô phỏng tài xế ShopeeFood 8H"
+          >
+            <Gamepad2 className="w-3.5 h-3.5 text-amber-600" />
+            <span className="hidden xs:inline">Game 8H</span>
+          </Link>
+
           {/* Quick SOS Link */}
           <Link
             href="/incidents/new"
