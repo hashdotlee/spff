@@ -16,7 +16,9 @@ import {
   CircleParking,
   Lock,
   Zap,
+  Store,
 } from 'lucide-react';
+import { extractWarehouseShops } from '@/lib/utils/warehouseShops';
 
 interface NearestListProps {
   warehouses: Warehouse[];
@@ -67,6 +69,7 @@ export function NearestList({
           const navUrl = getGoogleMapsNavigationUrl(wh.latitude, wh.longitude, wh.address);
           const cat = wh.category || 'warehouse';
           const canRateOrders = cat === 'warehouse' || cat === 'eatery';
+          const shops = extractWarehouseShops(wh);
 
           return (
             <div
@@ -148,6 +151,14 @@ export function NearestList({
                       <span className="text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded-md border border-purple-200 font-bold inline-flex items-center gap-1">
                         <Lock className="w-2.5 h-2.5 text-purple-600" />
                         <span>Riêng tư</span>
+                      </span>
+                    )}
+
+                    {/* Đa shop badge */}
+                    {shops.length > 0 && (
+                      <span className="text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200 font-bold inline-flex items-center gap-1">
+                        <Store className="w-2.5 h-2.5 text-amber-700" />
+                        <span>{shops.length} shop</span>
                       </span>
                     )}
 

@@ -18,6 +18,9 @@ import { VoiceNoteCard } from '@/components/voice/VoiceNoteCard';
 import { VietQRModal } from '@/components/donation/VietQRModal';
 import { ReportWarehouseModal } from '@/components/warehouse/ReportWarehouseModal';
 import { RateLocationOrderModal } from '@/components/warehouse/RateLocationOrderModal';
+import { EditWarehouseShopsModal } from '@/components/admin/EditWarehouseShopsModal';
+import { EditWarehouseModal } from '@/components/warehouse/EditWarehouseModal';
+import { extractWarehouseShops, unmergeWarehouseAction } from '@/lib/utils/warehouseShops';
 import {
   Navigation2,
   MapPin,
@@ -41,6 +44,9 @@ import {
   TrendingUp,
   Clock,
   Sparkles,
+  Store,
+  GitMerge,
+  Edit3,
 } from 'lucide-react';
 
 function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
@@ -60,6 +66,8 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
   const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
   const [orderRatings, setOrderRatings] = useState<LocationOrderRating[]>([]);
   const [showRateOrderModal, setShowRateOrderModal] = useState(false);
+  const [showEditShopsModal, setShowEditShopsModal] = useState(false);
+  const [showEditWarehouseModal, setShowEditWarehouseModal] = useState(false);
   const [currentHour, setCurrentHour] = useState(12);
 
   const supabase = createClient();
@@ -162,6 +170,18 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
       alert('Có lỗi xảy ra khi đổi quyền riêng tư. Vui lòng thử lại!');
     } finally {
       setIsTogglingPrivacy(false);
+    }
+  }
+
+  async function handleUnmerge() {
+    if (!warehouse) return;
+    if (!confirm('Hủy gộp địa chỉ này? Địa chỉ sẽ khôi phục trạng thái hoạt động độc lập bình thường.')) return;
+    try {
+      await unmergeWarehouseAction(supabase, warehouse.id);
+      alert('Đã hủy gộp thành công!');
+      loadData();
+    } catch (e: any) {
+      alert(e.message || 'Lỗi khi hủy gộp');
     }
   }
 
@@ -315,6 +335,29 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
                 )}
               </button>
 
+              {currentUserRole === 'admin' && (
+                <button
+                  type="button"
+                  onClick={() => setShowEditShopsModal(true)}
+                  className="px-2.5 py-1.5 text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition active:scale-95 flex items-center gap-1 text-xs font-bold"
+                  title="Quản lý danh sách các shop tại địa chỉ này"
+                >
+                  <Store className="w-4 h-4 text-amber-600" />
+                  <span className="hidden xs:inline">Quản lý Shop</span>
+                </button>
+              )}
+
+              {/* Nút sửa thông tin và ghim lại định vị dành cho người tạo hoặc Admin */}
+              <button
+                type="button"
+                onClick={() => setShowEditWarehouseModal(true)}
+                className="px-2.5 py-1.5 text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-xl transition active:scale-95 flex items-center gap-1 text-xs font-bold"
+                title="Sửa tên shop, địa chỉ chính xác hoặc ghim lại tọa độ định vị"
+              >
+                <Edit3 className="w-4 h-4 text-orange-600" />
+                <span className="hidden xs:inline">Sửa / Ghim lại</span>
+              </button>
+
               <button
                 onClick={handleDeleteWarehouse}
                 disabled={isDeletingWh}
@@ -328,6 +371,38 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
           )}
         </div>
       </div>
+
+      {/* Thông báo nếu địa chỉ đã được gộp */}
+      {warehouse.merged_into && (
+        <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-900 text-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <GitMerge className="w-5 h-5 text-amber-600 shrink-0" />
+            <div className="min-w-0">
+              <strong className="block font-bold">Địa chỉ này đã được Quản trị viên gộp</strong>
+              <p className="text-[11px] text-amber-700">
+                Các shop và voice notes chỉ dẫn đã được gom về địa chỉ đại diện chính.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Link
+              href={`/warehouse/${warehouse.merged_into}`}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition active:scale-95 shadow-xs"
+            >
+              Tới địa chỉ chính &rarr;
+            </Link>
+            {currentUserRole === 'admin' && (
+              <button
+                type="button"
+                onClick={handleUnmerge}
+                className="px-2.5 py-1.5 bg-white border border-amber-300 text-amber-800 rounded-xl text-xs font-bold transition active:scale-95"
+              >
+                Hủy gộp
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {currentUserRole === 'admin' && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-2 text-red-800 text-xs font-medium">
@@ -406,6 +481,17 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
               <p className="text-xs sm:text-sm text-slate-600 mt-1 flex items-start gap-1">
                 <span>{warehouse.address}</span>
               </p>
+            )}
+
+            {(currentUserId === warehouse.created_by || currentUserRole === 'admin') && (
+              <button
+                type="button"
+                onClick={() => setShowEditWarehouseModal(true)}
+                className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold text-orange-600 hover:text-orange-700 active:scale-95 transition"
+              >
+                <Edit3 className="w-3 h-3" />
+                <span>Ghim lại định vị hoặc sửa tên / địa chỉ chính xác</span>
+              </button>
             )}
           </div>
         </div>
@@ -525,6 +611,80 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
           <span>Dẫn Đường Trực Tiếp (Google Maps)</span>
         </a>
       </div>
+
+      {/* CÁC SHOP / CỬA HÀNG TẠI ĐỊA CHỈ NÀY */}
+      {(() => {
+        const shops = extractWarehouseShops(warehouse);
+        if (shops.length === 0 && currentUserRole !== 'admin') return null;
+
+        return (
+          <div className="bg-gradient-to-br from-amber-50/70 via-white to-orange-50/50 rounded-2xl p-4 sm:p-5 border border-amber-200/90 shadow-xs space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                  <Store className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
+                    <span>Các Shop Tại Địa Chỉ Này</span>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-extrabold">
+                      {shops.length} shop
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Địa chỉ này là điểm đến chung của các shop đăng ký tại đây
+                  </p>
+                </div>
+              </div>
+
+              {currentUserRole === 'admin' && (
+                <button
+                  type="button"
+                  onClick={() => setShowEditShopsModal(true)}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1 active:scale-95 shadow-xs shrink-0"
+                >
+                  <Store className="w-3.5 h-3.5" />
+                  <span>Sửa shop</span>
+                </button>
+              )}
+            </div>
+
+            {shops.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                {shops.map((shop, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 bg-white rounded-xl border border-amber-200/70 shadow-2xs space-y-1 hover:border-amber-400 transition"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black flex items-center justify-center shrink-0">
+                        {idx + 1}
+                      </span>
+                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm truncate">
+                        {shop.name}
+                      </h4>
+                    </div>
+                    {shop.note && (
+                      <p className="text-[11px] text-slate-600 pl-7">
+                        📍 Vị trí: <strong className="text-slate-800">{shop.note}</strong>
+                      </p>
+                    )}
+                    {shop.phone && (
+                      <p className="text-[11px] text-slate-600 pl-7">
+                        📞 SĐT: <strong className="text-slate-800">{shop.phone}</strong>
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-3 text-center text-slate-400 bg-white rounded-xl border border-dashed border-amber-200 text-xs">
+                Chưa có danh sách shop đại diện. Quản trị viên có thể bấm &ldquo;Sửa shop&rdquo; để thêm.
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Tình hình nổ đơn theo giờ (Chỉ hiển thị cho Kho hàng hoặc Quán ăn) */}
       {canRateOrders && (
@@ -766,6 +926,30 @@ function WarehouseDetailContent({ paramsPromise }: { paramsPromise: Promise<{ id
           onClose={() => setShowRateOrderModal(false)}
           onRatingSubmitted={(newRating) => {
             setOrderRatings((prev) => [newRating, ...prev]);
+          }}
+        />
+      )}
+
+      {/* Modal Quản lý Shop tại địa chỉ (Admin) */}
+      {showEditShopsModal && warehouse && (
+        <EditWarehouseShopsModal
+          isOpen={showEditShopsModal}
+          onClose={() => setShowEditShopsModal(false)}
+          warehouse={warehouse}
+          onSuccess={() => {
+            loadData();
+          }}
+        />
+      )}
+
+      {/* Modal Sửa tên shop, địa chỉ chính xác hoặc ghim lại tọa độ (Người tạo & Admin) */}
+      {showEditWarehouseModal && warehouse && (
+        <EditWarehouseModal
+          isOpen={showEditWarehouseModal}
+          onClose={() => setShowEditWarehouseModal(false)}
+          warehouse={warehouse}
+          onSuccess={(updated) => {
+            setWarehouse((prev) => (prev ? { ...prev, ...updated } : null));
           }}
         />
       )}

@@ -59,6 +59,13 @@ export interface Profile {
   updated_at: string;
 }
 
+export interface WarehouseShop {
+  id?: string;
+  name: string;
+  note?: string; // Tầng, số phòng, ghi chú vị trí (VD: Tầng 2, P304, Cổng sau)
+  phone?: string;
+}
+
 export interface Warehouse {
   id: string;
   name: string;
@@ -71,12 +78,15 @@ export interface Warehouse {
   status: WarehouseStatus;
   category?: PlaceCategory;
   is_private?: boolean;
+  shops?: WarehouseShop[];
+  merged_into?: string | null;
   created_at: string;
   // Computed / Joined fields
   distance_km?: number;
   voice_notes_count?: number;
   creator?: Profile | null;
   order_prediction?: OrderPredictionResult;
+  merged_target?: Warehouse | null;
 }
 
 export interface VoiceNote {

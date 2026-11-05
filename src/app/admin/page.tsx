@@ -42,7 +42,19 @@ import {
   Award,
   Lock,
   Globe,
+  GitMerge,
+  Store,
+  CheckSquare,
+  Square,
+  Layers,
 } from 'lucide-react';
+import { MergeAddressesModal } from '@/components/admin/MergeAddressesModal';
+import { EditWarehouseShopsModal } from '@/components/admin/EditWarehouseShopsModal';
+import {
+  extractWarehouseShops,
+  formatWarehouseShopsText,
+  unmergeWarehouseAction,
+} from '@/lib/utils/warehouseShops';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -57,11 +69,17 @@ export default function AdminPage() {
 
   // Search & Filter states
   const [searchWarehouse, setSearchWarehouse] = useState('');
-  const [warehouseFilter, setWarehouseFilter] = useState<'all' | 'active' | 'hidden'>('all');
+  const [warehouseFilter, setWarehouseFilter] = useState<'all' | 'active' | 'hidden' | 'merged'>('all');
   const [searchVoice, setSearchVoice] = useState('');
   const [voiceFilter, setVoiceFilter] = useState<'all' | 'active' | 'hidden'>('all');
   const [searchUser, setSearchUser] = useState('');
   const [userFilter, setUserFilter] = useState<'all' | 'active' | 'banned' | 'admin'>('all');
+
+  // Multi-select & Merge addresses states
+  const [selectedWarehouseIdsForMerge, setSelectedWarehouseIdsForMerge] = useState<string[]>([]);
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+  const [editingShopsWarehouse, setEditingShopsWarehouse] = useState<Warehouse | null>(null);
+  const [isSelectMode, setIsSelectMode] = useState(false);
 
   // Audio preview playback in admin
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
@@ -254,6 +272,34 @@ export default function AdminPage() {
     }
   }
 
+  // Hủy gộp kho hàng (Admin)
+  async function handleUnmergeWarehouseAction(warehouseId: string, warehouseName: string) {
+    if (!confirm(`Hủy gộp địa chỉ "${warehouseName}"?\nĐịa chỉ này sẽ được khôi phục thành điểm độc lập hoạt động bình thường.`)) return;
+
+    try {
+      await unmergeWarehouseAction(supabase, warehouseId);
+      setMessage({ text: `Đã hủy gộp địa chỉ "${warehouseName}" thành công!`, type: 'success' });
+      checkAdminAndLoad();
+    } catch (err: any) {
+      setMessage({ text: err.message || 'Lỗi khi hủy gộp địa chỉ.', type: 'error' });
+    }
+  }
+
+  // Chọn / bỏ chọn kho để gộp
+  function toggleSelectWarehouseForMerge(warehouseId: string) {
+    setSelectedWarehouseIdsForMerge((prev) =>
+      prev.includes(warehouseId) ? prev.filter((id) => id !== warehouseId) : [...prev, warehouseId]
+    );
+  }
+
+  // Mở modal gộp địa chỉ
+  function openMergeModal(initialIds?: string[]) {
+    if (initialIds && initialIds.length > 0) {
+      setSelectedWarehouseIdsForMerge(initialIds);
+    }
+    setIsMergeModalOpen(true);
+  }
+
   // Bật/tắt Ẩn voice note
   async function handleToggleVoiceNote(noteId: string, currentStatus: string) {
     const newStatus = currentStatus === 'hidden' ? 'active' : 'hidden';
@@ -359,11 +405,25 @@ export default function AdminPage() {
 
   // Filtered warehouses
   const filteredWarehouses = warehouses.filter((wh) => {
+    const q = searchWarehouse.toLowerCase().trim();
+    const shops = extractWarehouseShops(wh);
+    const matchShop = shops.some(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.note && s.note.toLowerCase().includes(q))
+    );
+
     const matchSearch =
-      wh.name.toLowerCase().includes(searchWarehouse.toLowerCase()) ||
-      (wh.address && wh.address.toLowerCase().includes(searchWarehouse.toLowerCase()));
-    if (warehouseFilter === 'all') return matchSearch;
-    return matchSearch && wh.status === warehouseFilter;
+      !q ||
+      wh.name.toLowerCase().includes(q) ||
+      (wh.address && wh.address.toLowerCase().includes(q)) ||
+      matchShop;
+
+    if (!matchSearch) return false;
+
+    if (warehouseFilter === 'all') return true;
+    if (warehouseFilter === 'merged') return Boolean(wh.merged_into || shops.length > 1);
+    return wh.status === warehouseFilter;
   });
 
   // Filtered voice notes
@@ -726,144 +786,326 @@ export default function AdminPage() {
       {/* ===================== TAB 2: WAREHOUSES ===================== */}
       {activeTab === 'warehouses' && (
         <div className="space-y-3">
+          {/* Action Bar for Address Merge */}
+          <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-100/50 p-3 rounded-2xl border border-orange-200/80 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-orange-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <GitMerge className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                  <span>Gộp Nhiều Địa Chỉ (Đa Shop Cùng Địa Điểm)</span>
+                  <span className="px-1.5 py-0.2 rounded bg-orange-600 text-white text-[9px] font-extrabold uppercase">
+                    Admin
+                  </span>
+                </h4>
+                <p className="text-[11px] text-slate-600">
+                  Gộp các shop đăng ký khác tên ở cùng một địa chỉ thành 1 điểm đại diện
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsSelectMode(!isSelectMode)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border active:scale-95 ${
+                  isSelectMode
+                    ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>{isSelectMode ? 'Tắt chọn nhiều' : 'Chọn nhiều để gộp'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => openMergeModal(selectedWarehouseIdsForMerge)}
+                className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-xs active:scale-95"
+              >
+                <GitMerge className="w-3.5 h-3.5" />
+                <span>Gộp địa chỉ {selectedWarehouseIdsForMerge.length > 0 ? `(${selectedWarehouseIdsForMerge.length})` : ''}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Selection Banner if items selected */}
+          {selectedWarehouseIdsForMerge.length > 0 && (
+            <div className="p-3 bg-slate-900 text-white rounded-2xl shadow-lg flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-1">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-orange-500 text-white text-xs font-black flex items-center justify-center">
+                  {selectedWarehouseIdsForMerge.length}
+                </span>
+                <span className="text-xs font-bold">
+                  Đã chọn {selectedWarehouseIdsForMerge.length} địa chỉ để gộp
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedWarehouseIdsForMerge([])}
+                  className="px-2.5 py-1 text-slate-300 hover:text-white text-xs font-medium transition"
+                >
+                  Bỏ chọn
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openMergeModal(selectedWarehouseIdsForMerge)}
+                  className="px-3 py-1 bg-orange-600 hover:bg-orange-500 text-white text-xs font-black rounded-xl transition flex items-center gap-1 active:scale-95"
+                >
+                  <GitMerge className="w-3.5 h-3.5" />
+                  <span>Tiến hành gộp ngay</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Search & Filter Bar */}
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Tìm kho theo tên hoặc địa chỉ..."
+                placeholder="Tìm kho, địa chỉ hoặc tên shop đại diện..."
                 value={searchWarehouse}
                 onChange={(e) => setSearchWarehouse(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-orange-500 focus:outline-none"
               />
             </div>
-            <div className="flex gap-1.5 text-xs font-semibold">
-              {(['all', 'active', 'hidden'] as const).map((st) => (
+            <div className="flex gap-1.5 text-xs font-semibold overflow-x-auto no-scrollbar">
+              {(['all', 'active', 'hidden', 'merged'] as const).map((st) => (
                 <button
                   key={st}
                   onClick={() => setWarehouseFilter(st)}
-                  className={`px-3 py-2 rounded-xl transition capitalize ${
+                  className={`px-3 py-2 rounded-xl transition whitespace-nowrap shrink-0 capitalize ${
                     warehouseFilter === st
                       ? 'bg-slate-900 text-white'
                       : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
                   }`}
                 >
-                  {st === 'all' ? 'Tất cả' : st === 'active' ? 'Đang hiện' : 'Đã ẩn'}
+                  {st === 'all'
+                    ? 'Tất cả'
+                    : st === 'active'
+                    ? 'Đang hiện'
+                    : st === 'hidden'
+                    ? 'Đã ẩn'
+                    : 'Đã gộp / Đa shop'}
                 </button>
               ))}
             </div>
           </div>
 
           {filteredWarehouses.length > 0 ? (
-            filteredWarehouses.map((wh) => (
-              <div
-                key={wh.id}
-                className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200 shadow-xs space-y-2.5"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-sm sm:text-base font-bold text-slate-900">{wh.name}</h3>
+            filteredWarehouses.map((wh) => {
+              const shops = extractWarehouseShops(wh);
+              const isSelected = selectedWarehouseIdsForMerge.includes(wh.id);
+              const isMerged = Boolean(wh.merged_into);
 
-                      {wh.category === 'eatery' ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                          🍜 Quán ăn
-                        </span>
-                      ) : wh.category === 'customer' ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-                          🏠 Nhà khách
-                        </span>
-                      ) : wh.category === 'parking' ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
-                          🅿️ Bãi giữ xe
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-800 border border-orange-200">
-                          🏢 Kho hàng
-                        </span>
+              return (
+                <div
+                  key={wh.id}
+                  className={`bg-white rounded-2xl p-3.5 sm:p-4 border shadow-xs space-y-2.5 transition-all ${
+                    isSelected
+                      ? 'border-orange-500 ring-2 ring-orange-500/20 bg-orange-50/10'
+                      : isMerged
+                      ? 'border-dashed border-slate-300 opacity-80'
+                      : 'border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                      {/* Checkbox for merge selection */}
+                      {(isSelectMode || isSelected) && (
+                        <button
+                          type="button"
+                          onClick={() => toggleSelectWarehouseForMerge(wh.id)}
+                          className="mt-0.5 text-slate-400 hover:text-orange-600 transition shrink-0"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-5 h-5 text-orange-600" />
+                          ) : (
+                            <Square className="w-5 h-5" />
+                          )}
+                        </button>
                       )}
 
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                          wh.status === 'active'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-rose-100 text-rose-800'
-                        }`}
-                      >
-                        {wh.status === 'active' ? 'Hoạt động' : 'Đã ẩn'}
-                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-sm sm:text-base font-bold text-slate-900">{wh.name}</h3>
 
-                      {wh.is_private ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200 inline-flex items-center gap-1">
-                          <Lock className="w-3 h-3 text-purple-600" />
-                          Riêng tư
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-200 inline-flex items-center gap-1">
-                          <Globe className="w-3 h-3 text-sky-600" />
-                          Công khai
-                        </span>
-                      )}
+                          {wh.category === 'eatery' ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              🍜 Quán ăn
+                            </span>
+                          ) : wh.category === 'customer' ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                              🏠 Nhà khách
+                            </span>
+                          ) : wh.category === 'parking' ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                              🅿️ Bãi giữ xe
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-800 border border-orange-200">
+                              🏢 Kho hàng
+                            </span>
+                          )}
+
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                              wh.status === 'active'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {wh.status === 'active' ? 'Hoạt động' : 'Đã ẩn'}
+                          </span>
+
+                          {isMerged && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1">
+                              <GitMerge className="w-3 h-3 text-amber-600" />
+                              Đã gộp vào địa chỉ khác
+                            </span>
+                          )}
+
+                          {wh.is_private ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200 inline-flex items-center gap-1">
+                              <Lock className="w-3 h-3 text-purple-600" />
+                              Riêng tư
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-200 inline-flex items-center gap-1">
+                              <Globe className="w-3 h-3 text-sky-600" />
+                              Công khai
+                            </span>
+                          )}
+                        </div>
+
+                        {wh.address && (
+                          <p className="text-xs text-slate-500 mt-0.5 truncate">{wh.address}</p>
+                        )}
+
+                        {/* Danh sách shop đại diện tại địa chỉ này */}
+                        {shops.length > 0 && (
+                          <div className="mt-2 p-2 bg-amber-50/60 border border-amber-200/80 rounded-xl space-y-1">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-amber-900">
+                              <span className="flex items-center gap-1">
+                                <Store className="w-3.5 h-3.5 text-amber-700" />
+                                <span>Đại diện {shops.length} shop tại địa chỉ này:</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setEditingShopsWarehouse(wh)}
+                                className="text-amber-800 hover:text-amber-950 underline text-[10px]"
+                              >
+                                Sửa danh sách
+                              </button>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {shops.map((s, idx) => (
+                                <span
+                                  key={idx}
+                                  className="px-2 py-0.5 bg-white text-slate-800 rounded-lg text-[10px] font-semibold border border-amber-200/70"
+                                >
+                                  {s.name} {s.note ? `(${s.note})` : ''}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1.5">
+                          <span>Tọa độ: {wh.latitude.toFixed(4)}, {wh.longitude.toFixed(4)}</span>
+                          <span>•</span>
+                          <span>Chỉ dẫn voice: {wh.voice_notes_count || 0}</span>
+                          <span>•</span>
+                          <span>Tạo bởi: {wh.creator?.full_name || 'Hệ thống'}</span>
+                        </div>
+                      </div>
                     </div>
 
-                    {wh.address && (
-                      <p className="text-xs text-slate-500 mt-0.5 truncate">{wh.address}</p>
-                    )}
-
-                    <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1">
-                      <span>Tọa độ: {wh.latitude.toFixed(4)}, {wh.longitude.toFixed(4)}</span>
-                      <span>•</span>
-                      <span>Chỉ dẫn voice: {wh.voice_notes_count || 0}</span>
-                      <span>•</span>
-                      <span>Tạo bởi: {wh.creator?.full_name || 'Hệ thống'}</span>
-                    </div>
+                    <Link
+                      href={`/warehouse/${wh.id}`}
+                      className="p-2 text-slate-500 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition active:scale-95 shrink-0"
+                      title="Xem chi tiết kho"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </Link>
                   </div>
 
-                  <Link
-                    href={`/warehouse/${wh.id}`}
-                    className="p-2 text-slate-500 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition active:scale-95 shrink-0"
-                    title="Xem chi tiết kho"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </Link>
+                  {wh.description && (
+                    <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded-xl">
+                      {wh.description}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 flex-wrap">
+                    {/* Nút hành động Gộp / Sửa Shop */}
+                    {isMerged ? (
+                      <button
+                        type="button"
+                        onClick={() => handleUnmergeWarehouseAction(wh.id, wh.name)}
+                        className="min-h-[34px] px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 active:scale-95 rounded-xl text-xs font-semibold transition flex items-center gap-1.5"
+                        title="Khôi phục trạng thái hoạt động độc lập cho địa chỉ này"
+                      >
+                        <GitMerge className="w-3.5 h-3.5 text-amber-700" />
+                        <span>Hủy gộp</span>
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setEditingShopsWarehouse(wh)}
+                          className="min-h-[34px] px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 active:scale-95 rounded-xl text-xs font-semibold transition flex items-center gap-1.5"
+                          title="Chỉnh sửa danh sách shop tại địa chỉ này"
+                        >
+                          <Store className="w-3.5 h-3.5 text-amber-700" />
+                          <span>Sửa shop ({shops.length})</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => openMergeModal([wh.id])}
+                          className="min-h-[34px] px-3 py-1 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 active:scale-95 rounded-xl text-xs font-semibold transition flex items-center gap-1.5"
+                          title="Gộp địa chỉ này với các địa chỉ khác"
+                        >
+                          <GitMerge className="w-3.5 h-3.5 text-orange-600" />
+                          <span>Gộp vào...</span>
+                        </button>
+                      </>
+                    )}
+
+                    <button
+                      onClick={() => handleToggleWarehousePrivacyAction(wh.id, wh.name, !!wh.is_private)}
+                      className="min-h-[34px] px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 active:scale-95 rounded-xl text-xs font-semibold transition flex items-center gap-1.5"
+                      title="Chuyển chế độ riêng tư / công khai"
+                    >
+                      {wh.is_private ? <Globe className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                      <span>{wh.is_private ? 'Chuyển Công khai' : 'Đặt Riêng tư'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleToggleWarehouse(wh.id, wh.status)}
+                      className="min-h-[34px] px-3 py-1 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 rounded-xl text-xs font-semibold transition flex items-center gap-1.5"
+                    >
+                      {wh.status === 'hidden' ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                      <span>{wh.status === 'hidden' ? 'Hiện lại kho' : 'Ẩn kho'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDeleteWarehouseAction(wh.id, wh.name)}
+                      className="min-h-[34px] px-3 py-1 bg-red-600 hover:bg-red-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
+                      title="Xóa kho vĩnh viễn"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Xóa Kho</span>
+                    </button>
+                  </div>
                 </div>
-
-                {wh.description && (
-                  <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded-xl">
-                    {wh.description}
-                  </p>
-                )}
-
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 flex-wrap">
-                  <button
-                    onClick={() => handleToggleWarehousePrivacyAction(wh.id, wh.name, !!wh.is_private)}
-                    className="min-h-[34px] px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 active:scale-95 rounded-xl text-xs font-semibold transition flex items-center gap-1.5"
-                    title="Chuyển chế độ riêng tư / công khai"
-                  >
-                    {wh.is_private ? <Globe className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-                    <span>{wh.is_private ? 'Chuyển Công khai' : 'Đặt Riêng tư'}</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleToggleWarehouse(wh.id, wh.status)}
-                    className="min-h-[34px] px-3 py-1 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 rounded-xl text-xs font-semibold transition flex items-center gap-1.5"
-                  >
-                    {wh.status === 'hidden' ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                    <span>{wh.status === 'hidden' ? 'Hiện lại kho' : 'Ẩn kho'}</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleDeleteWarehouseAction(wh.id, wh.name)}
-                    className="min-h-[34px] px-3 py-1 bg-red-600 hover:bg-red-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
-                    title="Xóa kho vĩnh viễn"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Xóa Kho</span>
-                  </button>
-                </div>
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="p-8 text-center text-slate-500 bg-white rounded-2xl border border-slate-200 text-xs">
               Không tìm thấy kho hàng nào.
@@ -1213,6 +1455,33 @@ export default function AdminPage() {
           )}
         </div>
       )}
+
+      {/* MODAL GỘP ĐỊA CHỈ */}
+      <MergeAddressesModal
+        isOpen={isMergeModalOpen}
+        onClose={() => {
+          setIsMergeModalOpen(false);
+          setSelectedWarehouseIdsForMerge([]);
+        }}
+        warehouses={warehouses}
+        initialSelectedIds={selectedWarehouseIdsForMerge}
+        onMergeSuccess={(msg) => {
+          setMessage({ text: msg, type: 'success' });
+          setSelectedWarehouseIdsForMerge([]);
+          checkAdminAndLoad();
+        }}
+      />
+
+      {/* MODAL CHỈNH SỬA SHOP CỦA ĐỊA CHỈ */}
+      <EditWarehouseShopsModal
+        isOpen={!!editingShopsWarehouse}
+        onClose={() => setEditingShopsWarehouse(null)}
+        warehouse={editingShopsWarehouse}
+        onSuccess={() => {
+          setMessage({ text: 'Đã cập nhật danh sách shop thành công!', type: 'success' });
+          checkAdminAndLoad();
+        }}
+      />
     </div>
   );
 }

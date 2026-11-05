@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS public.warehouses (
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'reported', 'hidden')),
     category TEXT NOT NULL DEFAULT 'warehouse' CHECK (category IN ('warehouse', 'eatery', 'customer', 'parking')),
     is_private BOOLEAN NOT NULL DEFAULT FALSE,
+    shops JSONB NOT NULL DEFAULT '[]'::jsonb,
+    merged_into UUID REFERENCES public.warehouses(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
@@ -154,7 +156,7 @@ BEGIN
     SELECT COALESCE(COUNT(*) * 10, 0) INTO warehouse_pts
     FROM public.warehouses
     WHERE created_by = target_user_id
-      AND status = 'active'
+      AND (status = 'active' OR (status = 'hidden' AND merged_into IS NOT NULL))
       AND is_private = false;
 
     -- B. Điểm từ voice chỉ dẫn đóng góp (+5 điểm mỗi voice note)
@@ -201,8 +203,8 @@ BEGIN
 
         PERFORM public.recalculate_user_reputation(OLD.created_by);
     ELSIF TG_OP = 'UPDATE' THEN
-        -- Khi kho bị chuyển sang hidden, tự động ẩn toàn bộ voice của kho đó
-        IF NEW.status = 'hidden' AND OLD.status IS DISTINCT FROM 'hidden' THEN
+        -- Khi kho bị chuyển sang hidden thông thường (không phải do gộp), tự động ẩn toàn bộ voice của kho đó
+        IF NEW.status = 'hidden' AND OLD.status IS DISTINCT FROM 'hidden' AND NEW.merged_into IS NULL THEN
             UPDATE public.voice_notes
             SET status = 'hidden',
                 updated_at = timezone('utc'::text, now())

@@ -13,6 +13,7 @@ import { fetchOrderRatings, calculateOrderPrediction, filterRatingsNearLocation 
 import { preloadFeedsData } from '@/lib/utils/feedsCache';
 import { useProvince } from '@/lib/contexts/ProvinceContext';
 import { getGoogleMapsNavigationUrl } from '@/lib/utils/googleMaps';
+import { extractWarehouseShops } from '@/lib/utils/warehouseShops';
 import {
   MapPin,
   PlusCircle,
@@ -31,6 +32,7 @@ import {
   Navigation2,
   Volume2,
   X,
+  Store,
 } from 'lucide-react';
 
 const MapView = dynamic(() => import('@/components/map/MapView'), {
@@ -386,10 +388,18 @@ export default function HomePage() {
       }
 
       if (!searchQuery.trim()) return true;
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
+      const shops = extractWarehouseShops(wh);
+      const matchShops = shops.some(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          (s.note && s.note.toLowerCase().includes(q))
+      );
+
       return (
         wh.name.toLowerCase().includes(q) ||
-        (wh.address && wh.address.toLowerCase().includes(q))
+        (wh.address && wh.address.toLowerCase().includes(q)) ||
+        matchShops
       );
     });
 
@@ -706,6 +716,30 @@ export default function HomePage() {
                     {selectedWarehouse.address}
                   </p>
                 )}
+
+                {/* Danh sách shop nếu địa chỉ đại diện cho nhiều shop */}
+                {(() => {
+                  const shops = extractWarehouseShops(selectedWarehouse);
+                  if (shops.length === 0) return null;
+                  return (
+                    <div className="mt-2 p-2 bg-amber-50/80 border border-amber-200/80 rounded-xl space-y-1">
+                      <p className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                        <Store className="w-3.5 h-3.5 text-amber-700" />
+                        <span>Đại diện {shops.length} shop tại địa chỉ này:</span>
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {shops.map((s, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2 py-0.5 bg-white text-slate-800 rounded-lg text-[10px] font-bold border border-amber-200 shadow-2xs"
+                          >
+                            {s.name} {s.note ? <span className="text-slate-500 font-normal">({s.note})</span> : ''}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 

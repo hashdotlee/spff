@@ -306,38 +306,6 @@ export default function MapView({
 
       const bgColor = isSelected ? '#b91c1c' : defaultBgColor;
 
-      const catBadge =
-        cat === 'eatery'
-          ? `<span style="background-color: #ecfdf5; color: #047857; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 6px; border: 1px solid #a7f3d0; display: inline-block; margin-bottom: 4px;">🍜 Quán ăn</span>`
-          : cat === 'customer'
-          ? `<span style="background-color: #eff6ff; color: #1d4ed8; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 6px; border: 1px solid #bfdbfe; display: inline-block; margin-bottom: 4px;">🏠 Nhà khách</span>`
-          : cat === 'parking'
-          ? `<span style="background-color: #eef2ff; color: #4338ca; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 6px; border: 1px solid #c7d2fe; display: inline-block; margin-bottom: 4px;">🅿️ Bãi giữ xe</span>`
-          : `<span style="background-color: #fff7ed; color: #c2410c; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 6px; border: 1px solid #fed7aa; display: inline-block; margin-bottom: 4px;">🏢 Kho hàng</span>`;
-
-      const privacyBadge = wh.is_private
-        ? `<span style="background-color: #faf5ff; color: #7e22ce; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 6px; border: 1px solid #e9d5ff; display: inline-block; margin-bottom: 4px; margin-left: 4px;">🔒 Riêng tư</span>`
-        : '';
-
-      const pred = wh.order_prediction;
-      const canRateOrders = cat === 'warehouse' || cat === 'eatery';
-      const curHour = new Date().getHours();
-      const orderBadge = canRateOrders
-        ? pred && pred.hasData
-          ? `<div style="margin: 4px 0; padding: 3px 6px; background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; font-size: 10px; display: flex; align-items: center; justify-content: space-between;">
-               <span>⚡ <strong>${cat === 'eatery' ? 'Quán' : 'Kho'} lúc ${curHour}h:</strong> ${pred.badgeText}</span>
-               <span style="font-weight: bold; color: #c2410c;">${pred.avgScore}/4⭐</span>
-             </div>`
-          : `<div style="margin: 4px 0; font-size: 10px; color: #64748b;">⚡ Lúc ${curHour}h: Chưa có báo đơn</div>`
-        : '';
-
-      const rateOrderBtn = canRateOrders
-        ? `<button onclick="window.__spff_rate_warehouse_order && window.__spff_rate_warehouse_order('${wh.id}')"
-             style="cursor: pointer; width: 100%; margin-top: 5px; padding: 5px 8px; background: linear-gradient(to right, #ea580c, #d97706); color: white; border-radius: 8px; font-size: 10px; font-weight: bold; border: none; display: flex; align-items: center; justify-content: center; gap: 4px;">
-             ⚡ Báo nổ đơn tại ${cat === 'eatery' ? 'quán này' : 'kho này'} (+2đ ⭐)
-          </button>`
-        : '';
-
       const pinIcon = L.divIcon({
         className: 'custom-warehouse-pin-container',
         html: `
@@ -352,51 +320,11 @@ export default function MapView({
         popupAnchor: [0, -32],
       });
 
-      const navUrl = getGoogleMapsNavigationUrl(wh.latitude, wh.longitude, wh.address);
-
       const marker = L.marker([wh.latitude, wh.longitude], { icon: pinIcon }).addTo(
         markersLayer
       );
 
-      marker.bindPopup(`
-        <div class="p-1 max-w-[210px]">
-          ${
-            wh.image_url
-              ? `<img src="${wh.image_url}" alt="${wh.name}" class="w-full h-20 object-cover rounded-lg mb-1.5 border border-slate-200" />`
-              : ''
-          }
-          ${catBadge}${privacyBadge}
-          <strong class="text-sm font-bold text-slate-900 block truncate">${wh.name}</strong>
-          ${
-            wh.distance_km !== undefined
-              ? `<span class="text-xs font-semibold text-orange-600 block mt-0.5">Cách bạn: ${
-                  wh.distance_km < 1
-                    ? Math.round(wh.distance_km * 1000) + ' m'
-                    : wh.distance_km.toFixed(1) + ' km'
-                }</span>`
-              : ''
-          }
-          <p class="text-[11px] text-slate-500 mt-1 line-clamp-2">${wh.address || ''}</p>
-          ${
-            wh.creator?.full_name
-              ? `<span class="text-[10px] text-slate-500 block mt-0.5">Ghim bởi: <strong class="text-slate-700">${wh.creator.full_name}</strong></span>`
-              : ''
-          }
-          ${orderBadge}
-          ${rateOrderBtn}
-          <div class="mt-2 flex items-center gap-1.5">
-            <a href="${navUrl}" target="_blank" rel="noopener noreferrer" 
-               class="px-2.5 py-1.5 bg-blue-600 text-white rounded-lg text-[11px] font-bold inline-flex items-center justify-center hover:bg-blue-700 active:scale-95 transition">
-               Đi ngay 🚀
-            </a>
-            <a href="/warehouse/${wh.id}" 
-               class="px-2.5 py-1.5 bg-orange-600 text-white rounded-lg text-[11px] font-bold inline-flex items-center justify-center hover:bg-orange-700 active:scale-95 transition">
-               Nghe chỉ dẫn 🎧
-            </a>
-          </div>
-        </div>
-      `);
-
+      // Bỏ popup trên map theo yêu cầu: thông tin chi tiết sẽ hiển thị ở thẻ bên dưới map khi click
       marker.on('click', () => {
         if (onSelectWarehouse) {
           onSelectWarehouse(wh);
@@ -404,7 +332,6 @@ export default function MapView({
       });
 
       if (isSelected) {
-        marker.openPopup();
         map.panTo([wh.latitude, wh.longitude], { animate: true });
       }
     });
