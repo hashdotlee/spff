@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
   Clock,
@@ -24,8 +24,6 @@ import {
   ChevronUp,
   Play,
   Pause,
-  ArrowRight,
-  ArrowLeft,
   ShieldAlert,
   Flame,
   Check,
@@ -87,13 +85,6 @@ export default function GamePage() {
   const [deliveryAnim, setDeliveryAnim] = useState<DeliveryAnimState | null>(null);
   const [highScore, setHighScore] = useState<number>(0);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
-
-  // Swipe decision state
-  const [dragOffsetX, setDragOffsetX] = useState<number>(0);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [swipeOutDirection, setSwipeOutDirection] = useState<'left' | 'right' | null>(null);
-  const dragStartXRef = useRef<number>(0);
-  const SWIPE_THRESHOLD = 75; // px to trigger decision
 
   const [stats, setStats] = useState<ShiftStats>({
     totalEarnings: 0,
@@ -157,9 +148,6 @@ export default function GamePage() {
   // Push new order with short delay
   const pushNewOrder = useCallback(() => {
     setGameState('waiting');
-    setDragOffsetX(0);
-    setIsDragging(false);
-    setSwipeOutDirection(null);
     const delay = setTimeout(() => {
       const order = generateRandomOrder();
       setCurrentOrder(order);
@@ -174,9 +162,6 @@ export default function GamePage() {
   // Start new shift
   const handleStartShift = () => {
     setRemainingMinutes(TOTAL_SHIFT_MINUTES);
-    setDragOffsetX(0);
-    setIsDragging(false);
-    setSwipeOutDirection(null);
     setStats({
       totalEarnings: 0,
       totalOrdersCompleted: 0,
@@ -217,55 +202,58 @@ export default function GamePage() {
   );
 
   // Reject order
-  const handleReject = (isAutoTimeout = false) => {
-    if (!currentOrder || gameState !== 'incoming') return;
+  const handleReject = useCallback(
+    (isAutoTimeout = false) => {
+      if (!currentOrder || gameState !== 'incoming') return;
 
-    playRejectSound();
-    const newRejections = stats.rejectionCount + 1;
-    let newMinutes = remainingMinutes;
-    let newPenaltiesCount = stats.penaltiesCount;
-    let newPenalizedMinutes = stats.penalizedMinutes;
+      playRejectSound();
+      const newRejections = stats.rejectionCount + 1;
+      let newMinutes = remainingMinutes;
+      let newPenaltiesCount = stats.penaltiesCount;
+      let newPenalizedMinutes = stats.penalizedMinutes;
 
-    // Check penalty threshold: at 3, 6 rejections
-    const isPenalized = newRejections === 3 || newRejections === 6;
-    if (isPenalized) {
-      newMinutes = Math.max(0, newMinutes - REJECTION_PENALTY_MINUTES);
-      newPenaltiesCount += 1;
-      newPenalizedMinutes += REJECTION_PENALTY_MINUTES;
-      setPenaltyAlert({
-        show: true,
-        strikeCount: newRejections,
-      });
-      playPenaltySound();
-    }
+      // Check penalty threshold: at 3, 6 rejections
+      const isPenalized = newRejections === 3 || newRejections === 6;
+      if (isPenalized) {
+        newMinutes = Math.max(0, newMinutes - REJECTION_PENALTY_MINUTES);
+        newPenaltiesCount += 1;
+        newPenalizedMinutes += REJECTION_PENALTY_MINUTES;
+        setPenaltyAlert({
+          show: true,
+          strikeCount: newRejections,
+        });
+        playPenaltySound();
+      }
 
-    const updatedStats: ShiftStats = {
-      ...stats,
-      rejectionCount: newRejections,
-      penaltiesCount: newPenaltiesCount,
-      penalizedMinutes: newPenalizedMinutes,
-    };
+      const updatedStats: ShiftStats = {
+        ...stats,
+        rejectionCount: newRejections,
+        penaltiesCount: newPenaltiesCount,
+        penalizedMinutes: newPenalizedMinutes,
+      };
 
-    setStats(updatedStats);
-    setRemainingMinutes(newMinutes);
-    setCurrentOrder(null);
+      setStats(updatedStats);
+      setRemainingMinutes(newMinutes);
+      setCurrentOrder(null);
 
-    // Check endgame conditions
-    if (newRejections >= MAX_REJECTIONS_ENDGAME) {
-      handleEndShift('rejected_9_orders', updatedStats);
-      return;
-    }
+      // Check endgame conditions
+      if (newRejections >= MAX_REJECTIONS_ENDGAME) {
+        handleEndShift('rejected_9_orders', updatedStats);
+        return;
+      }
 
-    if (newMinutes <= 0) {
-      handleEndShift('timeout', updatedStats);
-      return;
-    }
+      if (newMinutes <= 0) {
+        handleEndShift('timeout', updatedStats);
+        return;
+      }
 
-    // Otherwise next order
-    if (!isPenalized) {
-      pushNewOrder();
-    }
-  };
+      // Otherwise next order
+      if (!isPenalized) {
+        pushNewOrder();
+      }
+    },
+    [currentOrder, gameState, stats, remainingMinutes, handleEndShift, pushNewOrder]
+  );
 
   // Close penalty alert
   const handleDismissPenalty = () => {
@@ -277,12 +265,57 @@ export default function GamePage() {
     }
   };
 
+  // Finish delivering and update state
+  const completeOrder = useCallback(
+    (order: GameOrder, waitTime: number, totalOrderTime: number) => {
+      playCashKachingSound();
+      const newRemainingMinutes = Math.max(0, remainingMinutes - totalOrderTime);
+
+      const record: CompletedOrderRecord = {
+        orderId: order.id,
+        code: order.code,
+        type: order.type,
+        itemCount: order.itemCount,
+        zoneName: order.zone.shortName,
+        distanceKm: order.distanceKm,
+        earnings: order.finalPrice,
+        travelMinutes: order.travelMinutes,
+        waitMinutes: waitTime,
+        totalMinutes: totalOrderTime,
+        timeRemainingAfter: newRemainingMinutes,
+      };
+
+      const newStats: ShiftStats = {
+        ...stats,
+        totalEarnings: stats.totalEarnings + order.finalPrice,
+        // Đơn ghép X tính là X đơn hoàn thành
+        totalOrdersCompleted: stats.totalOrdersCompleted + order.itemCount,
+        foodOrdersCount: stats.foodOrdersCount + (order.type === 'food' ? order.itemCount : 0),
+        shipOrdersCount: stats.shipOrdersCount + (order.type === 'ship' ? order.itemCount : 0),
+        batchOrdersCount: stats.batchOrdersCount + (order.itemCount > 1 ? 1 : 0),
+        totalDistanceKm: Math.round((stats.totalDistanceKm + order.distanceKm) * 10) / 10,
+        totalDriveMinutes: stats.totalDriveMinutes + order.travelMinutes,
+        totalWaitMinutes: stats.totalWaitMinutes + waitTime,
+        completedOrders: [record, ...stats.completedOrders],
+      };
+
+      setStats(newStats);
+      setRemainingMinutes(newRemainingMinutes);
+      setCurrentOrder(null);
+      setDeliveryAnim(null);
+
+      if (newRemainingMinutes <= 0) {
+        handleEndShift('timeout', newStats);
+      } else {
+        pushNewOrder();
+      }
+    },
+    [remainingMinutes, stats, handleEndShift, pushNewOrder]
+  );
+
   // Accept order
-  const handleAccept = () => {
+  const handleAccept = useCallback(() => {
     if (!currentOrder || gameState !== 'incoming') return;
-    setDragOffsetX(0);
-    setIsDragging(false);
-    setSwipeOutDirection(null);
 
     playAcceptSound();
     const order = currentOrder;
@@ -325,132 +358,25 @@ export default function GamePage() {
         }, 800);
       }, 900);
     }, 600);
-  };
+  }, [currentOrder, gameState, fastMode, completeOrder]);
 
-  // Animated swipe triggers
-  const triggerAcceptWithAnimation = useCallback(() => {
-    if (swipeOutDirection || gameState !== 'incoming') return;
-    setSwipeOutDirection('right');
-    setTimeout(() => {
-      setSwipeOutDirection(null);
-      setDragOffsetX(0);
-      handleAccept();
-    }, 180);
-  }, [swipeOutDirection, gameState, currentOrder, fastMode, remainingMinutes, stats]);
-
-  const triggerRejectWithAnimation = useCallback(() => {
-    if (swipeOutDirection || gameState !== 'incoming') return;
-    setSwipeOutDirection('left');
-    setTimeout(() => {
-      setSwipeOutDirection(null);
-      setDragOffsetX(0);
-      handleReject(false);
-    }, 180);
-  }, [swipeOutDirection, gameState, currentOrder, remainingMinutes, stats]);
-
-  // Pointer swipe gesture handlers (mouse & touch)
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (gameState !== 'incoming' || swipeOutDirection) return;
-    dragStartXRef.current = e.clientX;
-    setIsDragging(true);
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch (_) {}
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDragging || swipeOutDirection) return;
-    const deltaX = e.clientX - dragStartXRef.current;
-    setDragOffsetX(deltaX);
-  };
-
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDragging || swipeOutDirection) return;
-    setIsDragging(false);
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch (_) {}
-
-    if (dragOffsetX > SWIPE_THRESHOLD) {
-      triggerAcceptWithAnimation();
-    } else if (dragOffsetX < -SWIPE_THRESHOLD) {
-      triggerRejectWithAnimation();
-    } else {
-      setDragOffsetX(0);
-    }
-  };
-
-  const handlePointerCancel = () => {
-    setIsDragging(false);
-    setDragOffsetX(0);
-  };
-
-  // Keyboard controls: ArrowRight / Enter to Accept, ArrowLeft / Escape to Reject
+  // Keyboard controls: Enter / Space / ArrowRight to Accept, Escape / ArrowLeft to Reject
   useEffect(() => {
     if (gameState !== 'incoming') return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' || e.key === 'Enter') {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight') {
         e.preventDefault();
-        triggerAcceptWithAnimation();
-      } else if (e.key === 'ArrowLeft' || e.key === 'Escape') {
+        handleAccept();
+      } else if (e.key === 'Escape' || e.key === 'ArrowLeft') {
         e.preventDefault();
-        triggerRejectWithAnimation();
+        handleReject(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, triggerAcceptWithAnimation, triggerRejectWithAnimation]);
-
-  // Finish delivering and update state
-  const completeOrder = (
-    order: GameOrder,
-    waitTime: number,
-    totalOrderTime: number
-  ) => {
-    playCashKachingSound();
-    const newRemainingMinutes = Math.max(0, remainingMinutes - totalOrderTime);
-
-    const record: CompletedOrderRecord = {
-      orderId: order.id,
-      code: order.code,
-      type: order.type,
-      itemCount: order.itemCount,
-      zoneName: order.zone.shortName,
-      distanceKm: order.distanceKm,
-      earnings: order.finalPrice,
-      travelMinutes: order.travelMinutes,
-      waitMinutes: waitTime,
-      totalMinutes: totalOrderTime,
-      timeRemainingAfter: newRemainingMinutes,
-    };
-
-    const newStats: ShiftStats = {
-      ...stats,
-      totalEarnings: stats.totalEarnings + order.finalPrice,
-      // Đơn ghép X tính là X đơn hoàn thành
-      totalOrdersCompleted: stats.totalOrdersCompleted + order.itemCount,
-      foodOrdersCount: stats.foodOrdersCount + (order.type === 'food' ? order.itemCount : 0),
-      shipOrdersCount: stats.shipOrdersCount + (order.type === 'ship' ? order.itemCount : 0),
-      batchOrdersCount: stats.batchOrdersCount + (order.itemCount > 1 ? 1 : 0),
-      totalDistanceKm: Math.round((stats.totalDistanceKm + order.distanceKm) * 10) / 10,
-      totalDriveMinutes: stats.totalDriveMinutes + order.travelMinutes,
-      totalWaitMinutes: stats.totalWaitMinutes + waitTime,
-      completedOrders: [record, ...stats.completedOrders],
-    };
-
-    setStats(newStats);
-    setRemainingMinutes(newRemainingMinutes);
-    setCurrentOrder(null);
-    setDeliveryAnim(null);
-
-    if (newRemainingMinutes <= 0) {
-      handleEndShift('timeout', newStats);
-    } else {
-      pushNewOrder();
-    }
-  };
+  }, [gameState, handleAccept, handleReject]);
 
   // Instant skip delivery animation
   const handleSkipAnimation = () => {
@@ -690,267 +616,164 @@ export default function GamePage() {
         </div>
       )}
 
-      {/* Incoming Order Card - Swipeable Driver Decision HUD */}
+      {/* Incoming Order Card - Real Driver Decision HUD */}
       {gameState === 'incoming' && currentOrder && (
-        <div className="relative overflow-visible touch-pan-y select-none">
-          <div
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerCancel}
-            style={{
-              transform:
-                swipeOutDirection === 'right'
-                  ? 'translateX(130%) rotate(15deg)'
-                  : swipeOutDirection === 'left'
-                  ? 'translateX(-130%) rotate(-15deg)'
-                  : `translateX(${dragOffsetX}px) rotate(${dragOffsetX * 0.04}deg)`,
-              transition: isDragging
-                ? 'none'
-                : 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease, border-color 0.15s ease, box-shadow 0.15s ease',
-              touchAction: 'pan-y',
-            }}
-            className={`relative bg-white rounded-3xl border-2 shadow-xl overflow-hidden cursor-grab active:cursor-grabbing ${
-              dragOffsetX > 40
-                ? 'border-emerald-500 shadow-emerald-500/20'
-                : dragOffsetX < -40
-                ? 'border-rose-500 shadow-rose-500/20'
-                : 'border-orange-500 shadow-orange-500/10'
-            }`}
-          >
-            {/* Swipe Right Stamp (Nhận đơn) */}
-            <div
-              className="absolute top-3.5 left-3.5 z-30 pointer-events-none transition-all flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-emerald-600 text-white font-black text-xs sm:text-sm uppercase shadow-xl border-2 border-white tracking-wider"
-              style={{
-                opacity: swipeOutDirection === 'right' ? 1 : Math.min(1, Math.max(0, (dragOffsetX - 15) / 50)),
-                transform: `scale(${
-                  swipeOutDirection === 'right' ? 1.1 : Math.min(1.05, 0.8 + Math.max(0, dragOffsetX / 160))
-                }) rotate(-6deg)`,
-              }}
-            >
-              <Check className="w-4 h-4 sm:w-5 sm:h-5 stroke-[3]" />
-              <span>ĐỒNG Ý NHẬN</span>
-            </div>
-
-            {/* Swipe Left Stamp (Từ chối) */}
-            <div
-              className="absolute top-3.5 right-3.5 z-30 pointer-events-none transition-all flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-rose-600 text-white font-black text-xs sm:text-sm uppercase shadow-xl border-2 border-white tracking-wider"
-              style={{
-                opacity: swipeOutDirection === 'left' ? 1 : Math.min(1, Math.max(0, (-dragOffsetX - 15) / 50)),
-                transform: `scale(${
-                  swipeOutDirection === 'left' ? 1.1 : Math.min(1.05, 0.8 + Math.max(0, -dragOffsetX / 160))
-                }) rotate(6deg)`,
-              }}
-            >
-              <XCircle className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
-              <span>TỪ CHỐI</span>
-            </div>
-
-            {/* Header of Order Card */}
-            <div className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-3.5 py-2.5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded-lg bg-white/20 backdrop-blur-xs text-xs font-black flex items-center gap-1">
-                  {currentOrder.type === 'food' ? '🍜 ShopeeFood' : '📦 SPX Ship'}
+        <div className="bg-white rounded-3xl border-2 border-orange-500 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          {/* Header of Order Card */}
+          <div className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-3.5 py-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-lg bg-white/20 backdrop-blur-xs text-xs font-black flex items-center gap-1">
+                {currentOrder.type === 'food' ? '🍜 ShopeeFood' : '📦 SPX Ship'}
+              </span>
+              {currentOrder.itemCount > 1 && (
+                <span className="px-2 py-0.5 rounded-lg bg-red-600 text-white text-[11px] font-black animate-pulse flex items-center gap-0.5">
+                  <Flame className="w-3 h-3 fill-white" />
+                  Ghép {currentOrder.itemCount}
                 </span>
+              )}
+              <span className="text-[11px] font-semibold opacity-90 hidden xs:inline">
+                {currentOrder.code}
+              </span>
+            </div>
+
+            {/* Countdown timer (20s) */}
+            <div
+              className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-black transition ${
+                decisionSecondsLeft <= 5
+                  ? 'bg-red-600 text-white animate-pulse'
+                  : 'bg-black/25 backdrop-blur-xs text-white'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>{decisionSecondsLeft}s</span>
+            </div>
+          </div>
+
+          {/* Decision Time Progress Bar */}
+          <div className="w-full bg-orange-100 h-1.5 overflow-hidden">
+            <div
+              className={`h-full transition-all duration-1000 ease-linear ${
+                decisionSecondsLeft <= 5 ? 'bg-red-600' : 'bg-orange-600'
+              }`}
+              style={{
+                width: `${(decisionSecondsLeft / DECISION_TIMEOUT_SECONDS) * 100}%`,
+              }}
+            />
+          </div>
+
+          {/* Order Details Body */}
+          <div className="p-3.5 sm:p-4 flex flex-col gap-3">
+            {/* Big Fare Display */}
+            <div className="text-center py-2.5 px-3 bg-gradient-to-b from-orange-50/80 to-amber-50/40 rounded-2xl border border-orange-200/70">
+              <span className="text-[10px] sm:text-[11px] text-slate-500 font-extrabold uppercase tracking-wider block">
+                Thu nhập nhận về
+              </span>
+              <div className="text-3xl sm:text-4xl font-black text-orange-600 tracking-tight my-0.5">
+                {formatCurrencyVND(currentOrder.finalPrice)}
+              </div>
+              <div className="flex items-center justify-center gap-1.5 text-[11px] font-medium text-slate-600 flex-wrap">
+                <span className="font-semibold text-slate-700">📍 {currentOrder.zone.shortName}</span>
                 {currentOrder.itemCount > 1 && (
-                  <span className="px-2 py-0.5 rounded-lg bg-red-600 text-white text-[11px] font-black animate-pulse flex items-center gap-0.5">
-                    <Flame className="w-3 h-3 fill-white" />
-                    Ghép {currentOrder.itemCount}
+                  <span className="text-orange-700 font-bold">
+                    (~{formatCurrencyShort(Math.round(currentOrder.finalPrice / currentOrder.itemCount))}/đơn)
                   </span>
                 )}
-                <span className="text-[11px] font-semibold opacity-90 hidden xs:inline">
-                  {currentOrder.code}
-                </span>
-              </div>
-
-              {/* Countdown timer (20s) */}
-              <div
-                className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-black transition ${
-                  decisionSecondsLeft <= 5
-                    ? 'bg-red-600 text-white animate-pulse'
-                    : 'bg-black/25 backdrop-blur-xs text-white'
-                }`}
-              >
-                <Clock className="w-3.5 h-3.5" />
-                <span>{decisionSecondsLeft}s</span>
+                {currentOrder.zone.priceMultiplier !== 1.0 && (
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                    +{Math.round((currentOrder.zone.priceMultiplier - 1) * 100)}% cước
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Decision Time Progress Bar */}
-            <div className="w-full bg-orange-100 h-1.5 overflow-hidden">
-              <div
-                className={`h-full transition-all duration-1000 ease-linear ${
-                  decisionSecondsLeft <= 5 ? 'bg-red-600' : 'bg-orange-600'
-                }`}
-                style={{
-                  width: `${(decisionSecondsLeft / DECISION_TIMEOUT_SECONDS) * 100}%`,
-                }}
-              />
+            {/* 3 Core Decision Stats (Quãng đường • Chờ quán • Tổng thời gian) */}
+            <div className="grid grid-cols-3 gap-2 bg-slate-50 rounded-2xl p-2.5 border border-slate-200/80 text-center">
+              <div>
+                <span className="text-[11px] text-slate-500 font-bold block">Quãng đường</span>
+                <span className="text-base sm:text-lg font-black text-slate-900 block mt-0.5">
+                  {currentOrder.distanceKm} km
+                </span>
+                <span className="text-[10px] text-slate-500 block">
+                  ~{currentOrder.travelMinutes}p chạy
+                </span>
+              </div>
+
+              <div className="border-x border-slate-200 px-1">
+                <span className="text-[11px] text-slate-500 font-bold block">Chờ quán</span>
+                <span
+                  className={`text-base sm:text-lg font-black block mt-0.5 ${
+                    currentOrder.type === 'ship' ? 'text-emerald-600' : 'text-amber-700'
+                  }`}
+                >
+                  {currentOrder.type === 'ship'
+                    ? '0 phút'
+                    : `${currentOrder.potentialWaitMinutes.min}-${currentOrder.potentialWaitMinutes.max}p`}
+                </span>
+                <span className="text-[10px] text-slate-500 block truncate">
+                  {currentOrder.type === 'ship' ? '⚡ Đi ngay' : 'Quán chuẩn bị'}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-[11px] text-slate-500 font-bold block">Tổng dự kiến</span>
+                <span className="text-base sm:text-lg font-black text-slate-900 block mt-0.5">
+                  {currentOrder.type === 'ship'
+                    ? `~${currentOrder.travelMinutes}p`
+                    : `~${currentOrder.travelMinutes + currentOrder.potentialWaitMinutes.min}-${
+                        currentOrder.travelMinutes + currentOrder.potentialWaitMinutes.max
+                      }p`}
+                </span>
+                <span className="text-[10px] text-slate-500 block">Chạy + chờ</span>
+              </div>
             </div>
 
-            {/* Order Details Body */}
-            <div className="p-3.5 sm:p-4 flex flex-col gap-3">
-              {/* Big Fare Display */}
-              <div className="text-center py-2.5 px-3 bg-gradient-to-b from-orange-50/80 to-amber-50/40 rounded-2xl border border-orange-200/70">
-                <span className="text-[10px] sm:text-[11px] text-slate-500 font-extrabold uppercase tracking-wider block">
-                  Thu nhập nhận về
+            {/* Compact Route (Lấy -> Giao) */}
+            <div className="flex flex-col gap-1.5 text-xs bg-slate-50/70 rounded-xl p-2.5 border border-slate-200/70">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-black flex items-center justify-center shrink-0">
+                  L
                 </span>
-                <div className="text-3xl sm:text-4xl font-black text-orange-600 tracking-tight my-0.5">
-                  {formatCurrencyVND(currentOrder.finalPrice)}
-                </div>
-                <div className="flex items-center justify-center gap-1.5 text-[11px] font-medium text-slate-600 flex-wrap">
-                  <span className="font-semibold text-slate-700">📍 {currentOrder.zone.shortName}</span>
-                  {currentOrder.itemCount > 1 && (
-                    <span className="text-orange-700 font-bold">
-                      (~{formatCurrencyShort(Math.round(currentOrder.finalPrice / currentOrder.itemCount))}/đơn)
-                    </span>
-                  )}
-                  {currentOrder.zone.priceMultiplier !== 1.0 && (
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-                      +{Math.round((currentOrder.zone.priceMultiplier - 1) * 100)}% cước
-                    </span>
-                  )}
+                <div className="min-w-0 flex-1 truncate">
+                  <span className="text-slate-400 text-[10px] mr-1 font-bold">Lấy:</span>
+                  <span className="font-bold text-slate-800">{currentOrder.merchantName}</span>
                 </div>
               </div>
 
-              {/* 3 Core Decision Stats (Quãng đường • Chờ quán • Tổng thời gian) */}
-              <div className="grid grid-cols-3 gap-2 bg-slate-50 rounded-2xl p-2.5 border border-slate-200/80 text-center">
-                <div>
-                  <span className="text-[11px] text-slate-500 font-bold block">Quãng đường</span>
-                  <span className="text-base sm:text-lg font-black text-slate-900 block mt-0.5">
-                    {currentOrder.distanceKm} km
-                  </span>
-                  <span className="text-[10px] text-slate-500 block">
-                    ~{currentOrder.travelMinutes}p chạy
-                  </span>
-                </div>
-
-                <div className="border-x border-slate-200 px-1">
-                  <span className="text-[11px] text-slate-500 font-bold block">Chờ quán</span>
-                  <span
-                    className={`text-base sm:text-lg font-black block mt-0.5 ${
-                      currentOrder.type === 'ship' ? 'text-emerald-600' : 'text-amber-700'
-                    }`}
-                  >
-                    {currentOrder.type === 'ship'
-                      ? '0 phút'
-                      : `${currentOrder.potentialWaitMinutes.min}-${currentOrder.potentialWaitMinutes.max}p`}
-                  </span>
-                  <span className="text-[10px] text-slate-500 block truncate">
-                    {currentOrder.type === 'ship' ? '⚡ Đi ngay' : 'Quán chuẩn bị'}
-                  </span>
-                </div>
-
-                <div>
-                  <span className="text-[11px] text-slate-500 font-bold block">Tổng dự kiến</span>
-                  <span className="text-base sm:text-lg font-black text-slate-900 block mt-0.5">
-                    {currentOrder.type === 'ship'
-                      ? `~${currentOrder.travelMinutes}p`
-                      : `~${currentOrder.travelMinutes + currentOrder.potentialWaitMinutes.min}-${
-                          currentOrder.travelMinutes + currentOrder.potentialWaitMinutes.max
-                        }p`}
-                  </span>
-                  <span className="text-[10px] text-slate-500 block">Chạy + chờ</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-4 h-4 rounded-full bg-orange-100 text-orange-700 text-[10px] font-black flex items-center justify-center shrink-0">
+                  G
+                </span>
+                <div className="min-w-0 flex-1 truncate">
+                  <span className="text-slate-400 text-[10px] mr-1 font-bold">Giao:</span>
+                  <span className="font-bold text-slate-800">{currentOrder.deliveryAddress}</span>
                 </div>
               </div>
+            </div>
 
-              {/* Compact Route (Lấy -> Giao) */}
-              <div className="flex flex-col gap-1.5 text-xs bg-slate-50/70 rounded-xl p-2.5 border border-slate-200/70">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-black flex items-center justify-center shrink-0">
-                    L
-                  </span>
-                  <div className="min-w-0 flex-1 truncate">
-                    <span className="text-slate-400 text-[10px] mr-1 font-bold">Lấy:</span>
-                    <span className="font-bold text-slate-800">{currentOrder.merchantName}</span>
-                  </div>
-                </div>
+            {/* Bottom Decision Action Buttons */}
+            <div className="pt-1 flex flex-col gap-2">
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => handleReject(false)}
+                  className="w-28 sm:w-32 py-3.5 px-3 rounded-2xl border-2 border-slate-200 bg-slate-50 hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 active:scale-95 text-slate-600 font-extrabold text-sm transition flex items-center justify-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
+                >
+                  <XCircle className="w-4 h-4 text-slate-400" />
+                  <span>Từ chối</span>
+                </button>
 
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-4 h-4 rounded-full bg-orange-100 text-orange-700 text-[10px] font-black flex items-center justify-center shrink-0">
-                    G
-                  </span>
-                  <div className="min-w-0 flex-1 truncate">
-                    <span className="text-slate-400 text-[10px] mr-1 font-bold">Giao:</span>
-                    <span className="font-bold text-slate-800">{currentOrder.deliveryAddress}</span>
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleAccept}
+                  className="flex-1 py-3.5 px-4 rounded-2xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 active:scale-[0.98] text-white font-black text-sm sm:text-base shadow-lg shadow-orange-600/30 transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Check className="w-5 h-5 stroke-[3]" />
+                  <span>Chấp Nhận (+{formatCurrencyShort(currentOrder.finalPrice)})</span>
+                </button>
               </div>
 
-              {/* Interactive Swipe Decision Bar (Quẹt phải nhận đơn / Quẹt trái từ chối) */}
-              <div className="pt-1 flex flex-col gap-2">
-                <div className="relative h-14 bg-gradient-to-r from-rose-50 via-slate-100 to-emerald-50 rounded-2xl border border-slate-200/90 flex items-center justify-between px-3 overflow-hidden select-none">
-                  {/* Swipe Left Fill */}
-                  {dragOffsetX < 0 && (
-                    <div
-                      className="absolute inset-y-0 left-0 bg-rose-500/20 transition-all pointer-events-none"
-                      style={{ width: `${Math.min(100, (-dragOffsetX / SWIPE_THRESHOLD) * 100)}%` }}
-                    />
-                  )}
-                  {/* Swipe Right Fill */}
-                  {dragOffsetX > 0 && (
-                    <div
-                      className="absolute inset-y-0 right-0 bg-emerald-500/20 transition-all pointer-events-none"
-                      style={{ width: `${Math.min(100, (dragOffsetX / SWIPE_THRESHOLD) * 100)}%` }}
-                    />
-                  )}
-
-                  {/* Left trigger: Quẹt trái Từ chối */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      triggerRejectWithAnimation();
-                    }}
-                    className={`relative z-10 flex items-center gap-1.5 text-xs font-black transition px-2.5 py-2 rounded-xl active:scale-95 ${
-                      dragOffsetX < -30
-                        ? 'text-rose-700 bg-rose-100 shadow-xs'
-                        : 'text-slate-600 hover:text-rose-600'
-                    }`}
-                    title="Bấm hoặc quẹt thẻ sang trái để từ chối"
-                  >
-                    <ArrowLeft className="w-4 h-4 text-rose-500 animate-pulse" />
-                    <span>Quẹt trái: Từ chối</span>
-                  </button>
-
-                  {/* Central Swipe Hint Indicator */}
-                  <div
-                    className={`relative z-10 px-2.5 py-1 rounded-xl flex items-center gap-1 text-[11px] font-extrabold shadow-xs transition-all pointer-events-none ${
-                      dragOffsetX > 35
-                        ? 'bg-emerald-600 text-white scale-105'
-                        : dragOffsetX < -35
-                        ? 'bg-rose-600 text-white scale-105'
-                        : 'bg-white text-slate-700 border border-slate-200'
-                    }`}
-                    style={{
-                      transform: `translateX(${Math.max(-30, Math.min(30, dragOffsetX * 0.3))}px)`,
-                    }}
-                  >
-                    <span>{dragOffsetX > 35 ? '✓ Nhận' : dragOffsetX < -35 ? '✕ Bỏ' : '👈 Vuốt thẻ 👉'}</span>
-                  </div>
-
-                  {/* Right trigger: Quẹt phải Nhận đơn */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      triggerAcceptWithAnimation();
-                    }}
-                    className={`relative z-10 flex items-center gap-1.5 text-xs font-black transition px-2.5 py-2 rounded-xl active:scale-95 ${
-                      dragOffsetX > 30
-                        ? 'text-emerald-700 bg-emerald-100 shadow-xs'
-                        : 'text-orange-600 hover:text-emerald-600'
-                    }`}
-                    title="Bấm hoặc quẹt thẻ sang phải để nhận đơn"
-                  >
-                    <span>Quẹt phải: Nhận</span>
-                    <ArrowRight className="w-4 h-4 text-emerald-500 animate-pulse" />
-                  </button>
-                </div>
-
-                <div className="text-center text-[11px] text-slate-400 font-medium">
-                  👈 Vuốt sang <strong className="text-rose-600">trái</strong> để từ chối • Vuốt sang <strong className="text-emerald-600">phải</strong> để nhận đơn 👉
-                </div>
+              <div className="text-center text-[11px] text-slate-400 font-medium">
+                Bấm <strong>Chấp Nhận</strong> (hoặc Enter) • <strong>Từ chối</strong> (hoặc Esc)
               </div>
             </div>
           </div>
