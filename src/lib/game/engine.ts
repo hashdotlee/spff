@@ -5,7 +5,7 @@ export const KM_TRAVEL_MINUTES = 2.0; // 30 km/h => 2 minutes per 1 km
 export const REJECTION_PENALTY_THRESHOLD = 3;
 export const REJECTION_PENALTY_MINUTES = 40;
 export const MAX_REJECTIONS_ENDGAME = 9;
-export const DECISION_TIMEOUT_SECONDS = 15; // 15s to decide per order
+export const DECISION_TIMEOUT_SECONDS = 20; // 20s to decide per order
 
 export const ZONES: ZoneInfo[] = [
   {
@@ -117,31 +117,36 @@ export function calculateBasePrice(type: OrderType, itemCount: number, distanceK
   let price = 0;
   if (type === 'food') {
     if (itemCount === 1) {
-      if (distanceKm <= 3) {
+      // Dưới 5km đồng giá 13.5k (chuẩn xác thực tế ShopeeFood)
+      if (distanceKm <= 5.0) {
         price = 13500;
       } else {
-        price = 13500 + (distanceKm - 3) * 4025.64;
+        price = 13500 + (distanceKm - 5.0) * 4025;
       }
     } else {
       // Food batch (2..5)
       const extraBatchFee = (itemCount - 1) * 6500;
       const extraKmRate = itemCount >= 5 ? 2800 : 3200;
-      const distExtra = distanceKm > 3 ? (distanceKm - 3) * extraKmRate : 0;
+      const distExtra = distanceKm > 5.0 ? (distanceKm - 5.0) * extraKmRate : 0;
       price = 13500 + extraBatchFee + distExtra;
     }
   } else {
-    // Ship
+    // Ship (SPX Express / Shopee Ship)
     if (itemCount === 1) {
-      if (distanceKm <= 3) {
-        price = 15000;
+      if (distanceKm <= 4.0) {
+        price = 16000;
       } else {
-        price = 15000 + (distanceKm - 3) * 3800;
+        // Chuẩn thực tế tài xế: 19km = 78.8k, 30km = 124.8k, 15km = ~62k (rate ~4.185 đ/km)
+        price = 16000 + (distanceKm - 4.0) * 4185;
       }
     } else {
       // Ship batch (2..5)
-      const extraBatchFee = (itemCount - 1) * 25000;
-      const distExtra = distanceKm > 3 ? (distanceKm - 3) * 2712 : 0;
-      price = 15000 + extraBatchFee + distExtra;
+      // Dựa trên dữ liệu thực tế tài xế:
+      // 28.5km ghép 2 = 117.3k, 28km ghép 5 = 144.1k
+      const extraBatchFee = (itemCount - 1) * 12500;
+      const extraKmRate = itemCount >= 5 ? 3100 : 3400;
+      const distExtra = distanceKm > 4.0 ? (distanceKm - 4.0) * extraKmRate : 0;
+      price = 16000 + extraBatchFee + distExtra;
     }
   }
   return Math.round(price);
@@ -321,7 +326,7 @@ export function getDriverRanking(stats: ShiftStats): {
 
   const earnings = stats.totalEarnings;
 
-  if (earnings >= 700000) {
+  if (earnings >= 550000) {
     return {
       rank: 'S+',
       title: 'Chiến Thần ShopeeFood Vô Địch 🏆💎',
@@ -330,7 +335,7 @@ export function getDriverRanking(stats: ShiftStats): {
         'Kỷ lục siêu đẳng! Bạn đã tối ưu từng phút di chuyển và lựa đơn ghép cực kỳ chuẩn xác, thu nhập vượt xa 99% tài xế!',
     };
   }
-  if (earnings >= 550000) {
+  if (earnings >= 450000) {
     return {
       rank: 'S',
       title: 'Tài Xế Kim Cương Đẳng Cấp 💎',
@@ -339,7 +344,7 @@ export function getDriverRanking(stats: ShiftStats): {
         'Tuyệt vời! Bạn nắm vững công thức cước từng khu vực và tận dụng đơn ship dài cùng đơn ghép cực kỳ hiệu quả.',
     };
   }
-  if (earnings >= 420000) {
+  if (earnings >= 350000) {
     return {
       rank: 'A',
       title: 'Tài Xế Vàng Cần Mẫn 🥇',
@@ -348,7 +353,7 @@ export function getDriverRanking(stats: ShiftStats): {
         'Rất tốt! Bạn đạt thu nhập chuẩn của một shipper dày dặn kinh nghiệm, cân đối tốt giữa thời gian chờ quán và quãng đường.',
     };
   }
-  if (earnings >= 280000) {
+  if (earnings >= 250000) {
     return {
       rank: 'B',
       title: 'Tài Xế Bạc Đang Lên Tay 🥈',
