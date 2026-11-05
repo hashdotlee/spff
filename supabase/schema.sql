@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS public.warehouses (
     is_private BOOLEAN NOT NULL DEFAULT FALSE,
     shops JSONB NOT NULL DEFAULT '[]'::jsonb,
     merged_into UUID REFERENCES public.warehouses(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
 -- 4. Bảng Voice Notes (Lời nhắn chỉ đường bằng âm thanh)
@@ -72,7 +73,8 @@ CREATE TABLE IF NOT EXISTS public.voice_notes (
     upvotes_count INT NOT NULL DEFAULT 0,
     downvotes_count INT NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'hidden')),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
 -- 5. Bảng Voice Votes (Lưu lượt đánh giá, chống spam vote)

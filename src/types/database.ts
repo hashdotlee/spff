@@ -100,6 +100,7 @@ export interface VoiceNote {
   downvotes_count: number;
   status: VoiceNoteStatus;
   created_at: string;
+  updated_at?: string;
   // Joined fields
   user?: Profile | null;
   user_vote?: number | null; // 1: upvoted, -1: downvoted, null: not voted
