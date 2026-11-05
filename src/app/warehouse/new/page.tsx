@@ -30,6 +30,8 @@ import {
   Navigation2,
   Search,
   ChevronDown,
+  Zap,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 export default function NewWarehousePage() {
@@ -379,6 +381,21 @@ export default function NewWarehousePage() {
         className="hidden"
         onChange={handlePhotoCaptured}
       />
+
+      {/* Tabs chuyển đổi giữa Thêm Nhanh và Thêm Nhiều */}
+      <div className="flex items-center gap-2 mb-4 p-1 bg-slate-200/70 rounded-2xl">
+        <div className="flex-1 py-1.5 px-3 bg-white text-orange-600 font-bold text-xs rounded-xl shadow-xs text-center flex items-center justify-center gap-1.5 border border-orange-100">
+          <Zap className="w-3.5 h-3.5 fill-current" />
+          <span>Thêm nhanh (1 điểm GPS)</span>
+        </div>
+        <Link
+          href="/warehouse/batch"
+          className="flex-1 py-1.5 px-3 text-slate-600 hover:text-slate-900 font-semibold text-xs rounded-xl text-center flex items-center justify-center gap-1.5 transition"
+        >
+          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+          <span>Thêm nhiều (Excel & Bảng)</span>
+        </Link>
+      </div>
 
       {/* Top Header */}
       <div className="flex items-center justify-between mb-4">

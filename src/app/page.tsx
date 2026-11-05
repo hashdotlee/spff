@@ -8,6 +8,7 @@ import type { Warehouse, Incident, PlaceCategory, LocationOrderRating, FloodRepo
 import { calculateHaversineDistance, formatDistance } from '@/lib/utils/distance';
 import { NearestList } from '@/components/warehouse/NearestList';
 import { RateLocationOrderModal } from '@/components/warehouse/RateLocationOrderModal';
+import { PinWarehousePopover } from '@/components/warehouse/PinWarehousePopover';
 import { fetchOrderRatings, calculateOrderPrediction, filterRatingsNearLocation } from '@/lib/utils/orderRatings';
 import { preloadFeedsData } from '@/lib/utils/feedsCache';
 import { useProvince } from '@/lib/contexts/ProvinceContext';
@@ -67,6 +68,7 @@ export default function HomePage() {
   const [locationDenied, setLocationDenied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<PlaceCategory | 'all'>('warehouse');
+  const [isPinMenuOpen, setIsPinMenuOpen] = useState(false);
 
   const supabase = createClient();
 
@@ -420,14 +422,23 @@ export default function HomePage() {
           />
         </div>
 
-        <Link
-          href="/warehouse/new"
-          className="py-2.5 px-2.5 sm:px-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm shrink-0 active:scale-95"
-          title="Ghim địa chỉ mới"
-        >
-          <PlusCircle className="w-4 h-4 shrink-0" />
-          <span className="hidden sm:inline">Ghim</span>
-        </Link>
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsPinMenuOpen(!isPinMenuOpen)}
+            className="py-2.5 px-2.5 sm:px-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm shrink-0 active:scale-95 cursor-pointer"
+            title="Ghim địa chỉ mới (Thêm nhanh hoặc thêm nhiều)"
+          >
+            <PlusCircle className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">Ghim</span>
+          </button>
+
+          <PinWarehousePopover
+            isOpen={isPinMenuOpen}
+            onClose={() => setIsPinMenuOpen(false)}
+            mode="auto"
+          />
+        </div>
       </div>
 
       {/* Category Filter Buttons: Kho hàng (Mặc định) / Quán ăn / Nhà khách / Tất cả */}
