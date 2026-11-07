@@ -24,6 +24,7 @@ export interface Post {
   content: string;
   tag: PostTag;
   province: string | null;
+  image_url?: string | null;
   upvotes_count: number;
   downvotes_count: number;
   status: PostStatus;

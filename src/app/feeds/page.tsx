@@ -20,7 +20,16 @@ import {
   Search,
   X,
   Loader2,
+  Camera,
+  Zap,
+  ZoomIn,
 } from 'lucide-react';
+import {
+  compressImageWithDetails,
+  formatBytes,
+  uploadImageToSupabase,
+  type ImageCompressionResult,
+} from '@/lib/utils/imageUpload';
 
 function formatRelativeTime(dateString: string): string {
   const diffMs = Date.now() - new Date(dateString).getTime();
@@ -82,11 +91,31 @@ export default function FeedsPage() {
   const [loadingWarehouses, setLoadingWarehouses] = useState(false);
   const [warehouseSearch, setWarehouseSearch] = useState('');
 
+  // Image Upload States
+  const [selectedPhoto, setSelectedPhoto] = useState<{
+    blob: Blob;
+    previewUrl: string;
+    compression: ImageCompressionResult | null;
+  } | null>(null);
+  const [isCompressingPhoto, setIsCompressingPhoto] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [previewingImageUrl, setPreviewingImageUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialScrollDone = useRef(false);
   const lastVoteTimeRef = useRef<number>(0);
 
   const supabase = createClient();
+
+  // Dọn dẹp URL object của ảnh khi đổi ảnh hoặc unmount
+  useEffect(() => {
+    return () => {
+      if (selectedPhoto?.previewUrl) {
+        URL.revokeObjectURL(selectedPhoto.previewUrl);
+      }
+    };
+  }, [selectedPhoto?.previewUrl]);
 
   // Đánh dấu đã xem toàn bộ tin nhắn khi ở trang bảng tin
   useEffect(() => {
@@ -266,17 +295,71 @@ export default function FeedsPage() {
     }
   }, [loading, posts.length, scrollToBottom]);
 
-  // 4. Gửi tin nhắn mới lên bảng tin (Tức thời, không hiển thị loading làm mất tập trung)
-  async function sendFeedMessage(msgText: string) {
+  // Xử lý chọn ảnh & nén bằng Canvas trước khi tải lên
+  async function handleImageFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Vui lòng chọn tệp định dạng hình ảnh!');
+      return;
+    }
+
+    setIsCompressingPhoto(true);
+    try {
+      // Nén ảnh bằng Canvas với độ phân giải tối đa 1280px, nén JPEG 0.82
+      const result = await compressImageWithDetails(file, 1280, 1280, 0.82);
+      const url = URL.createObjectURL(result.blob);
+
+      if (selectedPhoto?.previewUrl) {
+        URL.revokeObjectURL(selectedPhoto.previewUrl);
+      }
+
+      setSelectedPhoto({
+        blob: result.blob,
+        previewUrl: url,
+        compression: result,
+      });
+    } catch (err) {
+      console.error('Lỗi khi nén ảnh:', err);
+      const url = URL.createObjectURL(file);
+      if (selectedPhoto?.previewUrl) {
+        URL.revokeObjectURL(selectedPhoto.previewUrl);
+      }
+      setSelectedPhoto({
+        blob: file,
+        previewUrl: url,
+        compression: null,
+      });
+    } finally {
+      setIsCompressingPhoto(false);
+      e.target.value = '';
+    }
+  }
+
+  function handleRemoveSelectedPhoto() {
+    if (selectedPhoto?.previewUrl) {
+      URL.revokeObjectURL(selectedPhoto.previewUrl);
+    }
+    setSelectedPhoto(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  // 4. Gửi tin nhắn mới lên bảng tin (Tức thời, hỗ trợ văn bản và hình ảnh đã nén)
+  async function sendFeedMessage(
+    msgText: string,
+    photoBlob?: Blob | null,
+    photoPreviewUrl?: string | null
+  ) {
     if (!currentUser) {
       alert('Vui lòng đăng nhập để gửi tin nhắn!');
       return;
     }
 
     const trimmed = msgText.trim();
-    if (!trimmed) return;
+    if (!trimmed && !photoBlob) return;
     if (trimmed.length > 500) {
-      alert('Nội dung quá dài!');
+      alert('Nội dung quá dài (tối đa 500 ký tự)!');
       return;
     }
 
@@ -285,7 +368,8 @@ export default function FeedsPage() {
     const optimisticPost: Post = {
       id: tempId,
       user_id: currentUser.id,
-      content: trimmed,
+      content: trimmed || (photoBlob ? '📷 [Hình ảnh]' : ''),
+      image_url: photoPreviewUrl || null,
       tag: 'tam_su',
       province: null,
       status: 'active',
@@ -307,18 +391,47 @@ export default function FeedsPage() {
     setTimeout(() => scrollToBottom(true), 40);
 
     try {
-      const postPayload = {
+      let uploadedImageUrl: string | null = null;
+      if (photoBlob) {
+        setIsUploading(true);
+        const fileName = `${currentUser.id}_${Date.now()}.jpg`;
+        uploadedImageUrl = await uploadImageToSupabase(supabase, photoBlob, {
+          primaryBucket: 'feed-images',
+          fileName,
+          fallbackBucket: 'warehouse-images',
+          compress: false, // Ảnh đã được nén trước khi upload
+        });
+      }
+
+      const postPayload: any = {
         user_id: currentUser.id,
-        content: trimmed,
+        content: trimmed || (uploadedImageUrl ? '📷 [Hình ảnh]' : ''),
         tag: 'tam_su',
         status: 'active',
       };
+      if (uploadedImageUrl) {
+        postPayload.image_url = uploadedImageUrl;
+      }
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('posts')
         .insert(postPayload)
         .select(`*, user:profiles(*)`)
         .single();
+
+      // Fallback nếu database chưa có cột image_url
+      if (error && (error.code === '42703' || error.message?.includes('image_url'))) {
+        console.warn('Cột image_url chưa có trong bảng posts, lưu link ảnh kèm nội dung:', error.message);
+        delete postPayload.image_url;
+        postPayload.content = trimmed ? `${trimmed}\n${uploadedImageUrl}` : `${uploadedImageUrl}`;
+        const fallbackRes = await supabase
+          .from('posts')
+          .insert(postPayload)
+          .select(`*, user:profiles(*)`)
+          .single();
+        data = fallbackRes.data;
+        error = fallbackRes.error;
+      }
 
       if (error) {
         console.error('Lỗi khi gửi tin nhắn:', error);
@@ -348,22 +461,33 @@ export default function FeedsPage() {
           return updated;
         });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Lỗi sendFeedMessage:', err);
       setPosts((prev) => {
         const reverted = prev.filter((p) => p.id !== tempId);
         setFeedsCache(reverted, topDrivers);
         return reverted;
       });
+      alert('Lỗi gửi tin: ' + (err?.message || 'Vui lòng thử lại'));
+    } finally {
+      setIsUploading(false);
     }
   }
 
   async function handleCreatePost(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = content.trim();
-    if (!trimmed) return;
+    if (!trimmed && !selectedPhoto) return;
+
+    const currentContent = trimmed;
+    const photoBlob = selectedPhoto?.blob || null;
+    const previewUrl = selectedPhoto?.previewUrl || null;
+
     setContent('');
-    await sendFeedMessage(trimmed);
+    setSelectedPhoto(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+
+    await sendFeedMessage(currentContent, photoBlob, previewUrl);
   }
 
   // Gửi định vị GPS hiện tại
@@ -645,8 +769,20 @@ export default function FeedsPage() {
                   </div>
 
                   {/* Nội dung tối đa 1 dòng */}
-                  <p className="text-xs text-slate-700 leading-tight truncate">
-                    {post.content}
+                  <p className="text-xs text-slate-700 leading-tight truncate flex items-center gap-1">
+                    {post.image_url && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 py-0.2 rounded shrink-0 flex items-center gap-0.5">
+                        <Camera className="w-2.5 h-2.5" />
+                        <span>Ảnh</span>
+                      </span>
+                    )}
+                    <span className="truncate">
+                      {post.content && post.content !== '📷 [Hình ảnh]'
+                        ? post.content
+                        : post.image_url
+                        ? 'Hình ảnh'
+                        : ''}
+                    </span>
                   </p>
                 </div>
               ))}
@@ -727,9 +863,34 @@ export default function FeedsPage() {
                           : 'bg-white border-slate-200/90'
                       }`}
                     >
-                      <p className="text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-wrap break-words">
-                        {renderMessageContent(post.content)}
-                      </p>
+                      {/* Hình ảnh đính kèm bài viết (nếu có) */}
+                      {post.image_url && (
+                        <div className="mb-1.5 rounded-xl overflow-hidden border border-slate-200/90 bg-slate-100 relative group cursor-pointer shadow-2xs max-w-xs sm:max-w-sm">
+                          <img
+                            src={post.image_url}
+                            alt="Ảnh bài đăng"
+                            className="w-full max-h-64 sm:max-h-72 object-cover hover:scale-[1.01] transition-transform duration-200"
+                            loading="lazy"
+                            onClick={() => setPreviewingImageUrl(post.image_url || null)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setPreviewingImageUrl(post.image_url || null)}
+                            className="absolute bottom-1.5 right-1.5 bg-slate-900/70 hover:bg-slate-900 text-white p-1 rounded-md opacity-80 sm:opacity-0 group-hover:opacity-100 transition flex items-center gap-1 text-[10px] font-bold cursor-pointer"
+                            title="Xem toàn màn hình"
+                          >
+                            <ZoomIn className="w-3 h-3" />
+                            <span>Phóng to</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Nội dung chữ (ẩn nếu chỉ là placeholder hình ảnh) */}
+                      {post.content && post.content !== '📷 [Hình ảnh]' && (
+                        <p className="text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-wrap break-words">
+                          {renderMessageContent(post.content)}
+                        </p>
+                      )}
 
                       {/* Cụm Upvote / Downvote thu gọn như reaction chat */}
                       <div className="flex items-center justify-end gap-1 mt-1 pt-1 border-t border-slate-100/80">
@@ -795,14 +956,74 @@ export default function FeedsPage() {
       {/* 3. Khung nhập tin nhắn Chat Cố Định Ở Đáy (Trên thanh BottomNavigation) */}
       <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] sm:bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] p-2 sm:p-2.5">
         <div className="max-w-xl mx-auto w-full space-y-1.5">
-          {/* Nút chức năng nhanh - Chỉ icon tối giản */}
+          {/* Preview ảnh đã chọn & đã nén trước khi gửi */}
+          {selectedPhoto && (
+            <div className="flex items-center gap-2 p-2 bg-emerald-50/70 border border-emerald-200/80 rounded-xl relative animate-in fade-in slide-in-from-bottom-1 duration-150">
+              <div className="relative w-11 h-11 rounded-lg overflow-hidden border border-emerald-300 shrink-0 bg-slate-200">
+                <img
+                  src={selectedPhoto.previewUrl}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-800">
+                  <Zap className="w-3 h-3 fill-emerald-600 text-emerald-700" />
+                  <span>Ảnh đã nén tiết kiệm 4G</span>
+                </div>
+                {selectedPhoto.compression && (
+                  <div className="text-[10px] text-emerald-700 font-medium truncate">
+                    {formatBytes(selectedPhoto.compression.originalSize)} ➔ {formatBytes(selectedPhoto.compression.compressedSize)} (-{selectedPhoto.compression.reductionPercentage}%)
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleRemoveSelectedPhoto}
+                disabled={isUploading}
+                className="p-1 text-slate-400 hover:text-red-500 rounded-full hover:bg-emerald-100/60 transition cursor-pointer shrink-0"
+                title="Hủy ảnh đã chọn"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Nút chức năng nhanh - Tải ảnh (nén tự động), Định vị GPS, Gửi kho */}
           {currentUser && (
             <div className="flex items-center gap-1.5 px-0.5">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageFileSelect}
+              />
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isCompressingPhoto || isUploading}
+                className={`p-1.5 rounded-lg border transition active:scale-90 cursor-pointer disabled:opacity-50 flex items-center gap-1 text-xs font-semibold ${
+                  selectedPhoto
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                    : 'bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 border-slate-200/80'
+                }`}
+                title="Chụp ảnh / Tải ảnh lên (tự động nén)"
+              >
+                {isCompressingPhoto ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                ) : (
+                  <Camera className="w-4 h-4 text-emerald-600" />
+                )}
+                <span className="text-[11px] text-slate-700">Tải ảnh</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleSendCurrentLocation}
-                disabled={isLocating}
-                className="p-1.5 bg-slate-100 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-lg border border-slate-200/80 transition active:scale-90 cursor-pointer disabled:opacity-50"
+                disabled={isLocating || isUploading}
+                className="p-1.5 bg-slate-100 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-lg border border-slate-200/80 transition active:scale-90 cursor-pointer disabled:opacity-50 flex items-center gap-1"
                 title="Gửi định vị hiện tại"
               >
                 {isLocating ? (
@@ -810,15 +1031,18 @@ export default function FeedsPage() {
                 ) : (
                   <MapPin className="w-4 h-4 text-orange-600" />
                 )}
+                <span className="text-[11px] text-slate-700">Định vị</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleOpenWarehousePicker}
-                className="p-1.5 bg-slate-100 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-lg border border-slate-200/80 transition active:scale-90 cursor-pointer"
+                disabled={isUploading}
+                className="p-1.5 bg-slate-100 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-lg border border-slate-200/80 transition active:scale-90 cursor-pointer flex items-center gap-1"
                 title="Gửi định vị kho"
               >
                 <Building2 className="w-4 h-4 text-amber-600" />
+                <span className="text-[11px] text-slate-700">Gửi kho</span>
               </button>
             </div>
           )}
@@ -831,18 +1055,23 @@ export default function FeedsPage() {
                 type="text"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="Nhập tin nhắn..."
+                placeholder={selectedPhoto ? "Thêm ghi chú cho ảnh (tùy chọn)..." : "Nhập tin nhắn..."}
                 maxLength={300}
+                disabled={isUploading}
                 className="flex-1 min-w-0 bg-slate-100/80 focus:bg-white border border-slate-200 focus:border-orange-500 rounded-xl px-3 py-2 text-xs sm:text-sm focus:outline-none transition placeholder:text-slate-400 shadow-2xs"
               />
               <button
                 type="submit"
-                disabled={!content.trim()}
+                disabled={(!content.trim() && !selectedPhoto) || isUploading || isCompressingPhoto}
                 className="p-2 sm:px-3.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shrink-0 active:scale-95 shadow-2xs cursor-pointer"
                 title="Gửi tin nhắn"
               >
-                <Send className="w-4 h-4" />
-                <span className="hidden sm:inline">Gửi</span>
+                {isUploading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+                <span className="hidden sm:inline">{isUploading ? 'Đang gửi...' : 'Gửi'}</span>
               </button>
             </form>
           ) : (
@@ -954,6 +1183,31 @@ export default function FeedsPage() {
                 })()
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Xem Chi Tiết Ảnh Phóng To */}
+      {previewingImageUrl && (
+        <div
+          className="fixed inset-0 z-[10000] bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 animate-in fade-in"
+          onClick={() => setPreviewingImageUrl(null)}
+        >
+          <div className="relative max-w-4xl max-h-[92vh] flex flex-col items-center">
+            <button
+              type="button"
+              onClick={() => setPreviewingImageUrl(null)}
+              className="absolute -top-11 right-0 p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition cursor-pointer"
+              title="Đóng xem ảnh"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img
+              src={previewingImageUrl}
+              alt="Chi tiết ảnh bài đăng"
+              className="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
         </div>
       )}

@@ -595,13 +595,17 @@ CREATE POLICY "Helpers and admins can delete help offer" ON public.incident_help
     EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
   );
 
--- Buckets cho Incident Photos và Warehouse Images
+-- Buckets cho Incident Photos, Warehouse Images và Feed Images
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('incident-photos', 'incident-photos', true)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('warehouse-images', 'warehouse-images', true)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('feed-images', 'feed-images', true)
 ON CONFLICT (id) DO NOTHING;
 
 CREATE POLICY "Public Read for incident-photos" ON storage.objects
@@ -619,6 +623,15 @@ CREATE POLICY "Public Read for warehouse-images" ON storage.objects
 CREATE POLICY "Authenticated users can upload warehouse images" ON storage.objects
   FOR INSERT WITH CHECK (
     bucket_id = 'warehouse-images' AND
+    auth.uid() IS NOT NULL
+  );
+
+CREATE POLICY "Public Read for feed-images" ON storage.objects
+  FOR SELECT USING (bucket_id = 'feed-images');
+
+CREATE POLICY "Authenticated users can upload feed-images" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'feed-images' AND
     auth.uid() IS NOT NULL
   );
 
@@ -681,7 +694,8 @@ FOR DELETE USING (
 CREATE TABLE IF NOT EXISTS public.posts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    content TEXT NOT NULL,
+    content TEXT,
+    image_url TEXT,
     tag TEXT NOT NULL DEFAULT 'tam_su' CHECK (tag IN ('ket_xe', 'chot_gt', 'canh_bao', 'tam_su', 'quan_ngon', 'khac')),
     province TEXT,
     upvotes_count INT NOT NULL DEFAULT 0,
@@ -689,7 +703,11 @@ CREATE TABLE IF NOT EXISTS public.posts (
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'hidden')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
-    CONSTRAINT post_content_length CHECK (char_length(content) <= 300)
+    CONSTRAINT post_content_length CHECK (content IS NULL OR char_length(content) <= 300),
+    CONSTRAINT posts_content_or_image_check CHECK (
+        (content IS NOT NULL AND char_length(trim(content)) > 0)
+        OR (image_url IS NOT NULL AND char_length(trim(image_url)) > 0)
+    )
 );
 
 -- Chỉ mục tối ưu cho truy vấn bảng tin theo thời gian và tỉnh thành
